@@ -67,7 +67,7 @@ class UserV1ApiE2ETest {
         return headers;
     }
 
-    @DisplayName("POST /user/signup")
+    @DisplayName("POST /api/v1/users")
     @Nested
     class Signup {
 
@@ -81,7 +81,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<UserV1Dto.SignupResponse>> response = testRestTemplate.exchange(
-                "/user/signup",
+                "/api/v1/users",
                 HttpMethod.POST,
                 new HttpEntity<>(request),
                 new ParameterizedTypeReference<>() {
@@ -111,7 +111,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user/signup",
+                "/api/v1/users",
                 HttpMethod.POST,
                 new HttpEntity<>(request),
                 new ParameterizedTypeReference<>() {
@@ -132,7 +132,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user/signup",
+                "/api/v1/users",
                 HttpMethod.POST,
                 new HttpEntity<>(request),
                 new ParameterizedTypeReference<>() {
@@ -153,7 +153,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user/signup",
+                "/api/v1/users",
                 HttpMethod.POST,
                 new HttpEntity<>(request),
                 new ParameterizedTypeReference<>() {
@@ -174,7 +174,28 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user/signup",
+                "/api/v1/users",
+                HttpMethod.POST,
+                new HttpEntity<>(request),
+                new ParameterizedTypeReference<>() {
+                }
+            );
+
+            // assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+
+        @DisplayName("비밀번호가 빈 값이면, 400 Bad Request를 반환한다.")
+        @Test
+        void returns400_whenPasswordIsBlank() {
+            // arrange
+            UserV1Dto.SignupRequest request = new UserV1Dto.SignupRequest(
+                LOGIN_ID, "", NAME, BIRTH_DATE, EMAIL
+            );
+
+            // act
+            ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
+                "/api/v1/users",
                 HttpMethod.POST,
                 new HttpEntity<>(request),
                 new ParameterizedTypeReference<>() {
@@ -195,7 +216,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user/signup",
+                "/api/v1/users",
                 HttpMethod.POST,
                 new HttpEntity<>(request),
                 new ParameterizedTypeReference<>() {
@@ -207,7 +228,7 @@ class UserV1ApiE2ETest {
         }
     }
 
-    @DisplayName("GET /user")
+    @DisplayName("GET /api/v1/users/me")
     @Nested
     class GetMyInfo {
 
@@ -220,7 +241,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<UserV1Dto.UserInfoResponse>> response = testRestTemplate.exchange(
-                "/user",
+                "/api/v1/users/me",
                 HttpMethod.GET,
                 new HttpEntity<>(headers),
                 new ParameterizedTypeReference<>() {
@@ -243,7 +264,7 @@ class UserV1ApiE2ETest {
         void returns401_whenAuthHeaderIsMissing() {
             // arrange & act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user",
+                "/api/v1/users/me",
                 HttpMethod.GET,
                 new HttpEntity<>(null),
                 new ParameterizedTypeReference<>() {
@@ -263,7 +284,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user",
+                "/api/v1/users/me",
                 HttpMethod.GET,
                 new HttpEntity<>(headers),
                 new ParameterizedTypeReference<>() {
@@ -275,7 +296,7 @@ class UserV1ApiE2ETest {
         }
     }
 
-    @DisplayName("PATCH /user/changePassword")
+    @DisplayName("PATCH /api/v1/users/password")
     @Nested
     class ChangePassword {
 
@@ -293,7 +314,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/user/changePassword",
+                "/api/v1/users/password",
                 HttpMethod.PATCH,
                 new HttpEntity<>(request, headers),
                 Void.class
@@ -301,6 +322,28 @@ class UserV1ApiE2ETest {
 
             // assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+            // act
+            ResponseEntity<Void> after = testRestTemplate.exchange(
+                    "/api/v1/users/me",
+                    HttpMethod.GET,
+                    new HttpEntity<>(createAuthHeaders(LOGIN_ID, NEW_PASSWORD)),
+                    new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertThat(after.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+            // act
+            ResponseEntity<Void> oldAuth = testRestTemplate.exchange(
+                    "/api/v1/users/me",
+                    HttpMethod.GET,
+                    new HttpEntity<>(createAuthHeaders(LOGIN_ID, RAW_PASSWORD)),
+                    new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertThat(oldAuth.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         }
 
         @DisplayName("인증 헤더가 없으면, 401 Unauthorized를 반환한다.")
@@ -313,7 +356,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user/changePassword",
+                "/api/v1/users/password",
                 HttpMethod.PATCH,
                 new HttpEntity<>(request),
                 new ParameterizedTypeReference<>() {
@@ -336,7 +379,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user/changePassword",
+                "/api/v1/users/password",
                 HttpMethod.PATCH,
                 new HttpEntity<>(request, headers),
                 new ParameterizedTypeReference<>() {
@@ -359,7 +402,53 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user/changePassword",
+                "/api/v1/users/password",
+                HttpMethod.PATCH,
+                new HttpEntity<>(request, headers),
+                new ParameterizedTypeReference<>() {
+                }
+            );
+
+            // assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+
+        @DisplayName("현재 비밀번호가 빈 값이면, 400 Bad Request를 반환한다.")
+        @Test
+        void returns400_whenCurrentPasswordIsBlank() {
+            // arrange
+            createUser(LOGIN_ID, RAW_PASSWORD, NAME, BIRTH_DATE, EMAIL);
+            HttpHeaders headers = createAuthHeaders(LOGIN_ID, RAW_PASSWORD);
+            UserV1Dto.ChangePasswordRequest request = new UserV1Dto.ChangePasswordRequest(
+                "", NEW_PASSWORD
+            );
+
+            // act
+            ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
+                "/api/v1/users/password",
+                HttpMethod.PATCH,
+                new HttpEntity<>(request, headers),
+                new ParameterizedTypeReference<>() {
+                }
+            );
+
+            // assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+
+        @DisplayName("새 비밀번호가 빈 값이면, 400 Bad Request를 반환한다.")
+        @Test
+        void returns400_whenNewPasswordIsBlank() {
+            // arrange
+            createUser(LOGIN_ID, RAW_PASSWORD, NAME, BIRTH_DATE, EMAIL);
+            HttpHeaders headers = createAuthHeaders(LOGIN_ID, RAW_PASSWORD);
+            UserV1Dto.ChangePasswordRequest request = new UserV1Dto.ChangePasswordRequest(
+                RAW_PASSWORD, ""
+            );
+
+            // act
+            ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
+                "/api/v1/users/password",
                 HttpMethod.PATCH,
                 new HttpEntity<>(request, headers),
                 new ParameterizedTypeReference<>() {
@@ -382,7 +471,7 @@ class UserV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/user/changePassword",
+                "/api/v1/users/password",
                 HttpMethod.PATCH,
                 new HttpEntity<>(request, headers),
                 new ParameterizedTypeReference<>() {
