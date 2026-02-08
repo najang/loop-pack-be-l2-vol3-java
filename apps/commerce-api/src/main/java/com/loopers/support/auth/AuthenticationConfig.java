@@ -18,8 +18,8 @@ public class AuthenticationConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authInterceptor)
-            .addPathPatterns("/user")
-            .addPathPatterns("/user/changePassword");
+            .addPathPatterns("/api/v1/users/me")
+            .addPathPatterns("/api/v1/users/password");
     }
 
     @Override

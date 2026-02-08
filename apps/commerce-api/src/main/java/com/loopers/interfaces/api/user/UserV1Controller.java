@@ -18,12 +18,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/user")
+@RequestMapping("/api/v1/users")
 public class UserV1Controller implements UserV1ApiSpec {
 
     private final UserFacade userFacade;
 
-    @PostMapping("/signup")
+    @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Override
     public ApiResponse<UserV1Dto.SignupResponse> signup(
@@ -39,7 +39,7 @@ public class UserV1Controller implements UserV1ApiSpec {
         return ApiResponse.success(UserV1Dto.SignupResponse.from(info));
     }
 
-    @GetMapping
+    @GetMapping("/me")
     @Override
     public ApiResponse<UserV1Dto.UserInfoResponse> getMyInfo(
         @LoginUser UserModel user
@@ -48,7 +48,7 @@ public class UserV1Controller implements UserV1ApiSpec {
         return ApiResponse.success(UserV1Dto.UserInfoResponse.from(info));
     }
 
-    @PatchMapping("/changePassword")
+    @PatchMapping("/password")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Override
     public void changePassword(
