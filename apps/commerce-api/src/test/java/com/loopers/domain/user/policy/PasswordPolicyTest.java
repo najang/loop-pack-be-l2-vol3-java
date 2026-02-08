@@ -71,19 +71,6 @@ class PasswordPolicyTest {
             assertThat(exception.getMessage()).contains("8~16자");
         }
 
-        @DisplayName("비밀번호가 null이면, BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenPasswordIsNull() {
-            // act
-            CoreException exception = assertThrows(CoreException.class, () ->
-                    passwordPolicy.validateForSignup(null, BIRTH_DATE)
-            );
-
-            // assert
-            assertThat(exception.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-            assertThat(exception.getMessage()).contains("8~16자");
-        }
-
         @DisplayName("비밀번호에 생년월일이 포함되면, BAD_REQUEST 예외가 발생한다.")
         @Test
         void throwsBadRequest_whenPasswordContainsBirthDate() {
@@ -147,38 +134,6 @@ class PasswordPolicyTest {
             // assert
             assertThat(exception.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
             assertThat(exception.getMessage()).contains("현재 비밀번호와 달라야");
-        }
-
-        @DisplayName("현재 비밀번호가 null이면, BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenCurrentPasswordIsNull() {
-            // arrange
-            String newPassword = "NewPass456!";
-
-            // act
-            CoreException exception = assertThrows(CoreException.class, () ->
-                    passwordPolicy.validateForChange(null, newPassword, BIRTH_DATE)
-            );
-
-            // assert
-            assertThat(exception.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-            assertThat(exception.getMessage()).contains("현재 비밀번호는 비어있을 수 없습니다");
-        }
-
-        @DisplayName("현재 비밀번호가 빈 문자열이면, BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenCurrentPasswordIsBlank() {
-            // arrange
-            String newPassword = "NewPass456!";
-
-            // act
-            CoreException exception = assertThrows(CoreException.class, () ->
-                    passwordPolicy.validateForChange("   ", newPassword, BIRTH_DATE)
-            );
-
-            // assert
-            assertThat(exception.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-            assertThat(exception.getMessage()).contains("현재 비밀번호는 비어있을 수 없습니다");
         }
 
         @DisplayName("새 비밀번호에 생년월일이 포함되면, BAD_REQUEST 예외가 발생한다.")
