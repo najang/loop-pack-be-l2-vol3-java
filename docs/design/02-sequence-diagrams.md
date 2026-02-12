@@ -632,7 +632,7 @@ sequenceDiagram
     participant 상품
     participant DB
 
-    Note over 어드민,DB: 모든 요청에 LDAP 인증 필수 (role=ADMIN)
+    Note over 어드민,DB: 모든 요청에 LDAP 인증 필수 (X-Loopers-Ldap: loopers.admin)
 
     rect rgb(240, 255, 240)
         Note over 어드민,DB: 브랜드 목록 조회

@@ -226,6 +226,6 @@
 | 동시성 제어 | 비관적 락(Pessimistic Lock + SELECT FOR UPDATE) |
 | 상품 옵션 | 단일 상품만 (옵션 없음) |
 | 주문 상태 | ORDERED → SHIPPING → DELIVERED + CANCELLED |
-| 어드민 인증 | X-Loopers-Ldap 헤더에 loopers.admin, User에 role 필드 추가, role=ADMIN 인증 |
+| 어드민 인증 | X-Loopers-Ldap 헤더의 loopers.admin 값으로 어드민 식별 |
 | 어드민 주문 관리 | 상태 변경 가능 (PATCH) |
 | 사용자 주문 취소 | ORDERED 상태일 때 취소 가능 (재고 복원) |
