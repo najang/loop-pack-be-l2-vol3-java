@@ -25,13 +25,6 @@ classDiagram
     -String name
     -LocalDate birthDate
     -String email
-    -UserRole role
-  }
-
-  class UserRole {
-    <<enumeration>>
-    USER
-    ADMIN
   }
 
   class Brand {
@@ -117,7 +110,6 @@ classDiagram
   BaseEntity <|-- OrderItem
 
   %% ─── Enum Relationships ───
-  User --> UserRole
   Product --> SellingStatus
   Order --> OrderStatus
 

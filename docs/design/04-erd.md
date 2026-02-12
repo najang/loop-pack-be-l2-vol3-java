@@ -9,7 +9,6 @@ erDiagram
         varchar name
         date birth_date
         varchar email
-        varchar role "USER / ADMIN"
         datetime created_at
         datetime updated_at
         datetime deleted_at
