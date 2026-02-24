@@ -12,6 +12,10 @@ public record UserInfo(
     String email
 ) {
     public static UserInfo from(UserModel model) {
+        if(model == null) {
+            throw new IllegalArgumentException("UserModel은 null일 수 없습니다.");
+        }
+
         return new UserInfo(
             model.getLoginId(),
             model.getName(),
