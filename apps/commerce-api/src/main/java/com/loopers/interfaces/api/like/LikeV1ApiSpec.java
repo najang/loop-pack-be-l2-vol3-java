@@ -29,9 +29,10 @@ public interface LikeV1ApiSpec {
 
     @Operation(
         summary = "좋아요 상품 목록 조회",
-        description = "로그인한 사용자가 좋아요한 상품 목록을 페이징하여 조회합니다."
+        description = "특정 사용자가 좋아요한 상품 목록을 페이징하여 조회합니다. 본인 조회만 가능합니다."
     )
     ApiResponse<LikeV1Dto.LikedProductPageResponse> getLikedProducts(
+        Long userId,
         @Parameter(hidden = true) UserModel user,
         int page,
         int size

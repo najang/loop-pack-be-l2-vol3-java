@@ -4,6 +4,8 @@ import com.loopers.application.like.LikeFacade;
 import com.loopers.domain.user.UserModel;
 import com.loopers.interfaces.api.ApiResponse;
 import com.loopers.support.auth.LoginUser;
+import com.loopers.support.error.CoreException;
+import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -41,13 +43,17 @@ public class LikeV1Controller implements LikeV1ApiSpec {
         likeFacade.unlike(user.getId(), productId);
     }
 
-    @GetMapping("/api/v1/users/me/likes")
+    @GetMapping("/api/v1/users/{userId}/likes")
     @Override
     public ApiResponse<LikeV1Dto.LikedProductPageResponse> getLikedProducts(
+        @PathVariable Long userId,
         @LoginUser UserModel user,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "10") int size
     ) {
+        if (!user.getId().equals(userId)) {
+            throw new CoreException(ErrorType.FORBIDDEN, "다른 사용자의 좋아요 목록은 조회할 수 없습니다.");
+        }
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return ApiResponse.success(LikeV1Dto.LikedProductPageResponse.from(
             likeFacade.findLikedProducts(user.getId(), pageable)
