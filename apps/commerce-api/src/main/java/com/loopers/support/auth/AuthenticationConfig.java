@@ -13,6 +13,7 @@ import java.util.List;
 public class AuthenticationConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
+    private final AdminAuthInterceptor adminAuthInterceptor;
     private final AuthenticatedUserArgumentResolver authenticatedUserArgumentResolver;
 
     @Override
@@ -20,6 +21,9 @@ public class AuthenticationConfig implements WebMvcConfigurer {
         registry.addInterceptor(authInterceptor)
             .addPathPatterns("/api/v1/users/me")
             .addPathPatterns("/api/v1/users/password");
+
+        registry.addInterceptor(adminAuthInterceptor)
+            .addPathPatterns("/api-admin/v1/**");
     }
 
     @Override
