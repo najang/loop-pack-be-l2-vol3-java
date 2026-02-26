@@ -14,10 +14,12 @@ public class OrderV1Dto {
         @Min(1) int quantity
     ) {}
 
-    public record OrderItemResponse(Long productId, int quantity, int unitPrice, int subtotal) {
+    public record OrderItemResponse(Long productId, String productName, String brandName, int quantity, int unitPrice, int subtotal) {
         public static OrderItemResponse from(OrderItemInfo info) {
             return new OrderItemResponse(
                 info.productId(),
+                info.productName(),
+                info.brandName(),
                 info.quantity(),
                 info.unitPrice(),
                 info.quantity() * info.unitPrice()

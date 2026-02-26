@@ -7,15 +7,17 @@ import com.loopers.support.auth.LoginUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -48,18 +50,22 @@ public class OrderV1Controller implements OrderV1ApiSpec {
         ));
     }
 
-    @GetMapping("/users/me/orders")
+    @GetMapping("/orders")
     @Override
     public ApiResponse<List<OrderV1Dto.OrderResponse>> getMyOrders(
-        @LoginUser UserModel user
+        @LoginUser UserModel user,
+        @RequestParam String startAt,
+        @RequestParam String endAt
     ) {
-        List<OrderV1Dto.OrderResponse> orders = orderFacade.findByUserId(user.getId()).stream()
+        ZonedDateTime start = ZonedDateTime.parse(startAt);
+        ZonedDateTime end = ZonedDateTime.parse(endAt);
+        List<OrderV1Dto.OrderResponse> orders = orderFacade.findByUserIdAndPeriod(user.getId(), start, end).stream()
             .map(OrderV1Dto.OrderResponse::from)
             .toList();
         return ApiResponse.success(orders);
     }
 
-    @DeleteMapping("/orders/{orderId}")
+    @PatchMapping("/orders/{orderId}/cancel")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Override
     public void cancelOrder(

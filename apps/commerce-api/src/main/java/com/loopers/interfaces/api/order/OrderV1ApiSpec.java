@@ -31,10 +31,12 @@ public interface OrderV1ApiSpec {
 
     @Operation(
         summary = "내 주문 목록 조회",
-        description = "로그인한 사용자의 전체 주문 목록을 조회합니다."
+        description = "로그인한 사용자의 주문 목록을 기간 필터로 조회합니다."
     )
     ApiResponse<List<OrderV1Dto.OrderResponse>> getMyOrders(
-        @Parameter(hidden = true) UserModel user
+        @Parameter(hidden = true) UserModel user,
+        String startAt,
+        String endAt
     );
 
     @Operation(
