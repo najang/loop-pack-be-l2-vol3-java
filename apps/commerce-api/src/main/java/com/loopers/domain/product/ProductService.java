@@ -44,4 +44,13 @@ public class ProductService {
         product.delete();
         productRepository.save(product);
     }
+
+    @Transactional
+    public void deleteByBrandId(Long brandId) {
+        productRepository.findByBrandId(brandId)
+            .forEach(product -> {
+                product.delete();
+                productRepository.save(product);
+            });
+    }
 }
