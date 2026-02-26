@@ -1,6 +1,8 @@
 package com.loopers.application.product;
 
 import com.loopers.domain.brand.BrandService;
+import com.loopers.domain.like.LikeService;
+import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
 import lombok.RequiredArgsConstructor;
@@ -14,9 +16,16 @@ public class ProductFacade {
 
     private final ProductService productService;
     private final BrandService brandService;
+    private final LikeService likeService;
 
     public ProductInfo findById(Long productId) {
-        return ProductInfo.from(productService.findById(productId));
+        return findById(productId, null);
+    }
+
+    public ProductInfo findById(Long productId, Long userId) {
+        Product product = productService.findById(productId);
+        Boolean isLiked = userId != null ? likeService.isLiked(userId, productId) : null;
+        return ProductInfo.from(product, isLiked);
     }
 
     public Page<ProductInfo> findAll(Long brandId, Pageable pageable) {

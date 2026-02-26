@@ -11,7 +11,8 @@ public record ProductInfo(
     int price,
     int stock,
     SellingStatus sellingStatus,
-    int likeCount
+    int likeCount,
+    Boolean isLiked
 ) {
     public static ProductInfo from(Product product) {
         return new ProductInfo(
@@ -22,7 +23,22 @@ public record ProductInfo(
             product.getPrice(),
             product.getStock(),
             product.getSellingStatus(),
-            product.getLikeCount()
+            product.getLikeCount(),
+            null
+        );
+    }
+
+    public static ProductInfo from(Product product, Boolean isLiked) {
+        return new ProductInfo(
+            product.getId(),
+            product.getBrandId(),
+            product.getName(),
+            product.getDescription(),
+            product.getPrice(),
+            product.getStock(),
+            product.getSellingStatus(),
+            product.getLikeCount(),
+            isLiked
         );
     }
 }

@@ -1,7 +1,9 @@
 package com.loopers.interfaces.api.product;
 
+import com.loopers.domain.user.UserModel;
 import com.loopers.interfaces.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "Product V1 API", description = "상품 관련 사용자 API 입니다.")
@@ -15,7 +17,10 @@ public interface ProductV1ApiSpec {
 
     @Operation(
         summary = "상품 단건 조회",
-        description = "상품 ID로 상품 정보를 조회합니다."
+        description = "상품 ID로 상품 정보를 조회합니다. 로그인 시 isLiked 여부를 포함합니다."
     )
-    ApiResponse<ProductV1Dto.ProductResponse> getProduct(Long productId);
+    ApiResponse<ProductV1Dto.ProductResponse> getProduct(
+        Long productId,
+        @Parameter(hidden = true) UserModel user
+    );
 }

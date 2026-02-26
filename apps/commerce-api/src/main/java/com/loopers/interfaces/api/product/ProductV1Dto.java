@@ -15,7 +15,8 @@ public class ProductV1Dto {
         int price,
         int stock,
         String sellingStatus,
-        int likeCount
+        int likeCount,
+        Boolean isLiked
     ) {
         public static ProductResponse from(ProductInfo info) {
             return new ProductResponse(
@@ -26,7 +27,8 @@ public class ProductV1Dto {
                 info.price(),
                 info.stock(),
                 info.sellingStatus().name(),
-                info.likeCount()
+                info.likeCount(),
+                info.isLiked()
             );
         }
     }

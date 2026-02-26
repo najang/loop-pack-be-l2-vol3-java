@@ -35,6 +35,14 @@ public class ProductRepositoryImpl implements ProductRepository {
     }
 
     @Override
+    public List<Product> findAllByIds(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return productJpaRepository.findByIdInAndDeletedAtIsNull(ids);
+    }
+
+    @Override
     public Product save(Product product) {
         return productJpaRepository.save(product);
     }

@@ -5,10 +5,11 @@ import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -19,25 +20,43 @@ public class LikeService {
     private final ProductRepository productRepository;
 
     @Transactional
-    public void toggle(Long userId, Long productId) {
+    public Product like(Long userId, Long productId) {
         Product product = productRepository.findById(productId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
 
         Optional<Like> existingLike = likeRepository.findByUserIdAndProductId(userId, productId);
-        if (existingLike.isPresent()) {
-            likeRepository.delete(existingLike.get());
-            product.decreaseLikes();
-        } else {
-            likeRepository.save(new Like(userId, productId));
-            product.increaseLikes();
-        }
-        productRepository.save(product);
+        existingLike.ifPresentOrElse(
+            like -> {},
+            () -> {
+                likeRepository.save(new Like(userId, productId));
+                product.increaseLikes();
+                productRepository.save(product);
+            }
+        );
+
+        return product;
+    }
+
+    @Transactional
+    public void unlike(Long userId, Long productId) {
+        Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
+
+        likeRepository.findByUserIdAndProductId(userId, productId)
+            .ifPresent(like -> {
+                likeRepository.delete(like);
+                product.decreaseLikes();
+                productRepository.save(product);
+            });
     }
 
     @Transactional(readOnly = true)
-    public List<Long> findLikedProductIds(Long userId) {
-        return likeRepository.findByUserId(userId).stream()
-            .map(Like::getProductId)
-            .toList();
+    public boolean isLiked(Long userId, Long productId) {
+        return likeRepository.findByUserIdAndProductId(userId, productId).isPresent();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Like> findByUserId(Long userId, Pageable pageable) {
+        return likeRepository.findByUserId(userId, pageable);
     }
 }

@@ -1,7 +1,9 @@
 package com.loopers.interfaces.api.product;
 
 import com.loopers.application.product.ProductFacade;
+import com.loopers.domain.user.UserModel;
 import com.loopers.interfaces.api.ApiResponse;
+import com.loopers.support.auth.LoginUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -32,8 +34,12 @@ public class ProductV1Controller implements ProductV1ApiSpec {
 
     @GetMapping("/{productId}")
     @Override
-    public ApiResponse<ProductV1Dto.ProductResponse> getProduct(@PathVariable Long productId) {
-        return ApiResponse.success(ProductV1Dto.ProductResponse.from(productFacade.findById(productId)));
+    public ApiResponse<ProductV1Dto.ProductResponse> getProduct(
+        @PathVariable Long productId,
+        @LoginUser UserModel user
+    ) {
+        Long userId = user != null ? user.getId() : null;
+        return ApiResponse.success(ProductV1Dto.ProductResponse.from(productFacade.findById(productId, userId)));
     }
 
     private Sort toSort(String sort) {

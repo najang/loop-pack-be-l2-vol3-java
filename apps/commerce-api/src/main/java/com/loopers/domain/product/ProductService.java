@@ -8,6 +8,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @RequiredArgsConstructor
 @Component
 public class ProductService {
@@ -43,6 +45,11 @@ public class ProductService {
         Product product = findById(id);
         product.delete();
         productRepository.save(product);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Product> findAllByIds(List<Long> ids) {
+        return productRepository.findAllByIds(ids);
     }
 
     @Transactional
