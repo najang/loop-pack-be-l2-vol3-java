@@ -13,8 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -23,7 +21,6 @@ class LikeServiceIntegrationTest {
 
     private static final Long BRAND_ID = 1L;
     private static final Long USER_ID = 1L;
-    private static final Long OTHER_USER_ID = 2L;
 
     @Autowired
     private LikeService likeService;
@@ -39,40 +36,40 @@ class LikeServiceIntegrationTest {
         databaseCleanUp.truncateAllTables();
     }
 
-    @DisplayName("좋아요 토글 시,")
+    @DisplayName("like() 시,")
     @Nested
-    class Toggle {
+    class LikeAction {
 
-        @DisplayName("toggle 하면 Product.likeCount가 +1된다.")
+        @DisplayName("like 하면 Product.likeCount가 +1된다.")
         @Test
-        void increasesLikeCount_whenToggleOn() {
+        void increasesLikeCount_whenLiked() {
             // arrange
             Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
 
             // act
-            likeService.toggle(USER_ID, product.getId());
+            likeService.like(USER_ID, product.getId());
 
             // assert
             Product updated = productService.findById(product.getId());
             assertThat(updated.getLikeCount()).isEqualTo(1);
         }
 
-        @DisplayName("toggle 후 다시 toggle하면 Product.likeCount가 -1된다.")
+        @DisplayName("동일 사용자가 like를 2번 호출하면 likeCount가 1로 유지된다 (멱등).")
         @Test
-        void decreasesLikeCount_whenToggleOff() {
+        void likeCountRemainsOne_whenSameUserLikesTwice() {
             // arrange
             Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
-            likeService.toggle(USER_ID, product.getId());
 
             // act
-            likeService.toggle(USER_ID, product.getId());
+            likeService.like(USER_ID, product.getId());
+            likeService.like(USER_ID, product.getId());
 
             // assert
             Product updated = productService.findById(product.getId());
-            assertThat(updated.getLikeCount()).isEqualTo(0);
+            assertThat(updated.getLikeCount()).isEqualTo(1);
         }
 
-        @DisplayName("삭제된 상품에 toggle 시도하면, NOT_FOUND 예외가 발생한다.")
+        @DisplayName("삭제된 상품에 like 시도하면, NOT_FOUND 예외가 발생한다.")
         @Test
         void throwsNotFound_whenProductIsDeleted() {
             // arrange
@@ -80,48 +77,44 @@ class LikeServiceIntegrationTest {
             productService.delete(product.getId());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> likeService.toggle(USER_ID, product.getId()));
+            CoreException ex = assertThrows(CoreException.class, () -> likeService.like(USER_ID, product.getId()));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
         }
     }
 
-    @DisplayName("좋아요한 상품 ID 목록 조회 시,")
+    @DisplayName("unlike() 시,")
     @Nested
-    class FindLikedProductIds {
+    class Unlike {
 
-        @DisplayName("해당 user의 좋아요한 productId 목록을 반환한다.")
+        @DisplayName("like 후 unlike 하면 Product.likeCount가 0이 된다.")
         @Test
-        void returnsLikedProductIds_forGivenUser() {
+        void decreasesLikeCount_whenUnliked() {
             // arrange
-            Product product1 = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
-            Product product2 = productService.create(BRAND_ID, "에어조던", "Nike Air Jordan", 200000, 5, SellingStatus.SELLING);
-            likeService.toggle(USER_ID, product1.getId());
-            likeService.toggle(USER_ID, product2.getId());
+            Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
+            likeService.like(USER_ID, product.getId());
 
             // act
-            List<Long> result = likeService.findLikedProductIds(USER_ID);
+            likeService.unlike(USER_ID, product.getId());
 
             // assert
-            assertThat(result).containsExactlyInAnyOrder(product1.getId(), product2.getId());
+            Product updated = productService.findById(product.getId());
+            assertThat(updated.getLikeCount()).isEqualTo(0);
         }
 
-        @DisplayName("다른 user의 좋아요는 포함되지 않는다.")
+        @DisplayName("좋아요 없는 상품에 unlike를 호출해도 likeCount가 0으로 유지된다 (멱등).")
         @Test
-        void excludesOtherUsersLikes() {
+        void likeCountRemainsZero_whenUnlikeCalledWithoutLike() {
             // arrange
-            Product product1 = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
-            Product product2 = productService.create(BRAND_ID, "에어조던", "Nike Air Jordan", 200000, 5, SellingStatus.SELLING);
-            likeService.toggle(USER_ID, product1.getId());
-            likeService.toggle(OTHER_USER_ID, product2.getId());
+            Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
 
             // act
-            List<Long> result = likeService.findLikedProductIds(USER_ID);
+            likeService.unlike(USER_ID, product.getId());
 
             // assert
-            assertThat(result).containsExactly(product1.getId());
-            assertThat(result).doesNotContain(product2.getId());
+            Product updated = productService.findById(product.getId());
+            assertThat(updated.getLikeCount()).isEqualTo(0);
         }
     }
 }

@@ -2,7 +2,6 @@ package com.loopers.domain.like;
 
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
-import com.loopers.domain.product.SellingStatus;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import org.junit.jupiter.api.DisplayName;
@@ -13,7 +12,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,9 +38,9 @@ class LikeServiceTest {
     @InjectMocks
     private LikeService likeService;
 
-    @DisplayName("좋아요 토글 시,")
+    @DisplayName("like() 시,")
     @Nested
-    class Toggle {
+    class LikeAction {
 
         @DisplayName("좋아요가 없으면, save 후 product.increaseLikes() + productRepository.save() 호출한다.")
         @Test
@@ -55,13 +53,50 @@ class LikeServiceTest {
             when(productRepository.save(product)).thenReturn(product);
 
             // act
-            likeService.toggle(USER_ID, PRODUCT_ID);
+            likeService.like(USER_ID, PRODUCT_ID);
 
             // assert
             verify(likeRepository, times(1)).save(any(Like.class));
             verify(product, times(1)).increaseLikes();
             verify(productRepository, times(1)).save(product);
         }
+
+        @DisplayName("좋아요가 이미 있으면, save/increaseLikes/productRepository.save를 호출하지 않는다 (멱등).")
+        @Test
+        void doesNotSaveOrIncrease_whenLikeAlreadyExists() {
+            // arrange
+            Product product = mock(Product.class);
+            Like like = mock(Like.class);
+            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+            when(likeRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.of(like));
+
+            // act
+            likeService.like(USER_ID, PRODUCT_ID);
+
+            // assert
+            verify(likeRepository, never()).save(any());
+            verify(product, never()).increaseLikes();
+            verify(productRepository, never()).save(any());
+        }
+
+        @DisplayName("상품이 존재하지 않으면, NOT_FOUND 예외가 발생한다.")
+        @Test
+        void throwsNotFound_whenProductDoesNotExist() {
+            // arrange
+            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
+
+            // act
+            CoreException ex = assertThrows(CoreException.class, () -> likeService.like(USER_ID, PRODUCT_ID));
+
+            // assert
+            assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
+            verify(likeRepository, never()).save(any());
+        }
+    }
+
+    @DisplayName("unlike() 시,")
+    @Nested
+    class Unlike {
 
         @DisplayName("좋아요가 있으면, delete 후 product.decreaseLikes() + productRepository.save() 호출한다.")
         @Test
@@ -74,12 +109,29 @@ class LikeServiceTest {
             when(productRepository.save(product)).thenReturn(product);
 
             // act
-            likeService.toggle(USER_ID, PRODUCT_ID);
+            likeService.unlike(USER_ID, PRODUCT_ID);
 
             // assert
             verify(likeRepository, times(1)).delete(like);
             verify(product, times(1)).decreaseLikes();
             verify(productRepository, times(1)).save(product);
+        }
+
+        @DisplayName("좋아요가 없으면, delete/decreaseLikes/productRepository.save를 호출하지 않는다 (멱등).")
+        @Test
+        void doesNotDeleteOrDecrease_whenLikeDoesNotExist() {
+            // arrange
+            Product product = mock(Product.class);
+            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+            when(likeRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.empty());
+
+            // act
+            likeService.unlike(USER_ID, PRODUCT_ID);
+
+            // assert
+            verify(likeRepository, never()).delete(any());
+            verify(product, never()).decreaseLikes();
+            verify(productRepository, never()).save(any());
         }
 
         @DisplayName("상품이 존재하지 않으면, NOT_FOUND 예외가 발생한다.")
@@ -89,34 +141,11 @@ class LikeServiceTest {
             when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> likeService.toggle(USER_ID, PRODUCT_ID));
+            CoreException ex = assertThrows(CoreException.class, () -> likeService.unlike(USER_ID, PRODUCT_ID));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
-            verify(likeRepository, never()).save(any());
             verify(likeRepository, never()).delete(any());
-        }
-    }
-
-    @DisplayName("좋아요한 상품 ID 목록 조회 시,")
-    @Nested
-    class FindLikedProductIds {
-
-        @DisplayName("해당 user의 좋아요 목록으로 productId 목록을 반환한다.")
-        @Test
-        void returnsProductIds_forGivenUser() {
-            // arrange
-            Like like1 = mock(Like.class);
-            Like like2 = mock(Like.class);
-            when(like1.getProductId()).thenReturn(100L);
-            when(like2.getProductId()).thenReturn(200L);
-            when(likeRepository.findByUserId(USER_ID)).thenReturn(List.of(like1, like2));
-
-            // act
-            List<Long> result = likeService.findLikedProductIds(USER_ID);
-
-            // assert
-            assertThat(result).containsExactlyInAnyOrder(100L, 200L);
         }
     }
 }
