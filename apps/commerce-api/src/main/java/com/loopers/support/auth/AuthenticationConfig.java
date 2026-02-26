@@ -23,7 +23,10 @@ public class AuthenticationConfig implements WebMvcConfigurer {
             .addPathPatterns("/api/v1/users/me")
             .addPathPatterns("/api/v1/users/password")
             .addPathPatterns("/api/v1/products/*/likes")
-            .addPathPatterns("/api/v1/users/me/likes");
+            .addPathPatterns("/api/v1/users/me/likes")
+            .addPathPatterns("/api/v1/orders")
+            .addPathPatterns("/api/v1/orders/*")
+            .addPathPatterns("/api/v1/users/me/orders");
 
         registry.addInterceptor(adminAuthInterceptor)
             .addPathPatterns("/api-admin/v1/**");
