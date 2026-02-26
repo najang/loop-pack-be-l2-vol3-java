@@ -268,16 +268,19 @@ class LikeV1ApiE2ETest {
         }
     }
 
-    @DisplayName("GET /api/v1/users/me/likes")
+    @DisplayName("GET /api/v1/users/{userId}/likes")
     @Nested
     class GetLikedProducts {
 
         @DisplayName("인증 없이 요청하면, 401 Unauthorized를 반환한다.")
         @Test
         void returns401_whenNoAuth() {
+            // arrange
+            UserModel user = createUser(LOGIN_ID);
+
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/api/v1/users/me/likes",
+                "/api/v1/users/" + user.getId() + "/likes",
                 HttpMethod.GET,
                 new HttpEntity<>(null),
                 new ParameterizedTypeReference<>() {}
@@ -291,7 +294,7 @@ class LikeV1ApiE2ETest {
         @Test
         void returns200WithLikedProducts_whenUserHasLikes() {
             // arrange
-            createUser(LOGIN_ID);
+            UserModel user = createUser(LOGIN_ID);
             Product product = createProduct("에어맥스");
             testRestTemplate.exchange(
                 "/api/v1/products/" + product.getId() + "/likes",
@@ -302,7 +305,7 @@ class LikeV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<LikeV1Dto.LikedProductPageResponse>> response = testRestTemplate.exchange(
-                "/api/v1/users/me/likes?page=0&size=10",
+                "/api/v1/users/" + user.getId() + "/likes?page=0&size=10",
                 HttpMethod.GET,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
@@ -317,11 +320,30 @@ class LikeV1ApiE2ETest {
             );
         }
 
-        @DisplayName("다른 사용자의 좋아요는 목록에 포함되지 않는다.")
+        @DisplayName("다른 사용자의 좋아요 목록 조회 시 403 Forbidden을 반환한다.")
+        @Test
+        void returns403_whenAccessingOtherUsersLikes() {
+            // arrange
+            createUser(LOGIN_ID);
+            UserModel otherUser = createUser(OTHER_LOGIN_ID);
+
+            // act
+            ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
+                "/api/v1/users/" + otherUser.getId() + "/likes?page=0&size=10",
+                HttpMethod.GET,
+                new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+
+        @DisplayName("다른 사용자의 좋아요는 본인 목록에 포함되지 않는다.")
         @Test
         void excludesOtherUsersLikes() {
             // arrange
-            createUser(LOGIN_ID);
+            UserModel user = createUser(LOGIN_ID);
             createUser(OTHER_LOGIN_ID);
             Product product1 = createProduct("에어맥스");
             Product product2 = createProduct("에어조던");
@@ -341,7 +363,7 @@ class LikeV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<LikeV1Dto.LikedProductPageResponse>> response = testRestTemplate.exchange(
-                "/api/v1/users/me/likes?page=0&size=10",
+                "/api/v1/users/" + user.getId() + "/likes?page=0&size=10",
                 HttpMethod.GET,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
