@@ -3,9 +3,7 @@ package com.loopers.application.cart;
 import com.loopers.domain.cart.Cart;
 import com.loopers.domain.cart.CartService;
 import com.loopers.domain.product.Product;
-import com.loopers.domain.product.ProductRepository;
-import com.loopers.support.error.CoreException;
-import com.loopers.support.error.ErrorType;
+import com.loopers.domain.product.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,11 +18,10 @@ import java.util.stream.Collectors;
 public class CartFacade {
 
     private final CartService cartService;
-    private final ProductRepository productRepository;
+    private final ProductService productService;
 
     public CartInfo add(Long userId, Long productId, int quantity) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
+        Product product = productService.findById(productId);
         Cart cart = cartService.add(userId, productId, quantity);
         return CartInfo.from(cart, product);
     }
@@ -36,7 +33,7 @@ public class CartFacade {
             return List.of();
         }
         List<Long> productIds = carts.stream().map(Cart::getProductId).toList();
-        Map<Long, Product> productMap = productRepository.findAllByIds(productIds).stream()
+        Map<Long, Product> productMap = productService.findAllByIds(productIds).stream()
             .collect(Collectors.toMap(Product::getId, Function.identity()));
         return carts.stream()
             .filter(cart -> productMap.containsKey(cart.getProductId()))
@@ -45,8 +42,7 @@ public class CartFacade {
     }
 
     public CartInfo updateQuantity(Long userId, Long productId, int quantity) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
+        Product product = productService.findById(productId);
         Cart cart = cartService.updateQuantity(userId, productId, quantity);
         return CartInfo.from(cart, product);
     }
