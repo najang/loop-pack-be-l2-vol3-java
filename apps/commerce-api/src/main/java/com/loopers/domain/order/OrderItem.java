@@ -21,6 +21,12 @@ public class OrderItem extends BaseEntity {
     @Column(name = "product_id", nullable = false)
     private Long productId;
 
+    @Column(name = "product_name", nullable = false)
+    private String productName;
+
+    @Column(name = "brand_name", nullable = false)
+    private String brandName;
+
     @Embedded
     @Getter(AccessLevel.NONE)
     private Quantity quantity;
@@ -33,11 +39,19 @@ public class OrderItem extends BaseEntity {
     protected OrderItem() {
     }
 
-    public OrderItem(Long productId, int quantity, int unitPrice) {
+    public OrderItem(Long productId, String productName, String brandName, int quantity, int unitPrice) {
         if (productId == null) {
             throw new CoreException(ErrorType.BAD_REQUEST, "상품 ID는 필수입니다.");
         }
+        if (productName == null || productName.isBlank()) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "상품명은 필수입니다.");
+        }
+        if (brandName == null || brandName.isBlank()) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "브랜드명은 필수입니다.");
+        }
         this.productId = productId;
+        this.productName = productName;
+        this.brandName = brandName;
         this.quantity = new Quantity(quantity);
         this.unitPrice = new Money(unitPrice);
     }
