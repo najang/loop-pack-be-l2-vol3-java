@@ -90,6 +90,41 @@ class CartServiceTest {
         }
     }
 
+    @DisplayName("장바구니 수량 변경 시,")
+    @Nested
+    class UpdateQuantity {
+
+        @DisplayName("해당 항목이 존재하지 않으면, NOT_FOUND 예외가 발생한다.")
+        @Test
+        void throwsNotFound_whenCartDoesNotExist() {
+            // arrange
+            when(cartRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.empty());
+
+            // act
+            CoreException ex = assertThrows(CoreException.class, () -> cartService.updateQuantity(USER_ID, PRODUCT_ID, 5));
+
+            // assert
+            assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
+            verify(cartRepository, never()).save(any());
+        }
+
+        @DisplayName("해당 항목이 존재하면, cart.updateQuantity()를 호출하고 save한다.")
+        @Test
+        void updatesQuantityAndSaves_whenCartExists() {
+            // arrange
+            Cart cart = mock(Cart.class);
+            when(cartRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.of(cart));
+            when(cartRepository.save(cart)).thenReturn(cart);
+
+            // act
+            cartService.updateQuantity(USER_ID, PRODUCT_ID, 5);
+
+            // assert
+            verify(cart, times(1)).updateQuantity(5);
+            verify(cartRepository, times(1)).save(cart);
+        }
+    }
+
     @DisplayName("장바구니 상품 삭제 시,")
     @Nested
     class Remove {

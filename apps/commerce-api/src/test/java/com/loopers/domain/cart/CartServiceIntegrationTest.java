@@ -101,6 +101,34 @@ class CartServiceIntegrationTest {
         }
     }
 
+    @DisplayName("장바구니 수량 변경 시,")
+    @Nested
+    class UpdateQuantity {
+
+        @DisplayName("정상적으로 수량을 변경할 수 있다.")
+        @Test
+        void updatesQuantity_successfully() {
+            // arrange
+            cartService.add(USER_ID, PRODUCT_ID, 3);
+
+            // act
+            Cart result = cartService.updateQuantity(USER_ID, PRODUCT_ID, 10);
+
+            // assert
+            assertThat(result.getQuantity()).isEqualTo(10);
+        }
+
+        @DisplayName("존재하지 않는 항목 수량 변경 시, NOT_FOUND 예외가 발생한다.")
+        @Test
+        void throwsNotFound_whenCartItemDoesNotExist() {
+            // act
+            CoreException ex = assertThrows(CoreException.class, () -> cartService.updateQuantity(USER_ID, PRODUCT_ID, 5));
+
+            // assert
+            assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
+        }
+    }
+
     @DisplayName("장바구니 상품 삭제 시,")
     @Nested
     class Remove {

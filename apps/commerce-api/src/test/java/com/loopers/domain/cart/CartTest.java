@@ -78,4 +78,34 @@ class CartTest {
             assertThat(cart.getQuantity()).isEqualTo(5);
         }
     }
+
+    @DisplayName("수량을 변경할 때,")
+    @Nested
+    class UpdateQuantity {
+
+        @DisplayName("1 미만의 수량으로 변경하면, BAD_REQUEST 예외가 발생한다.")
+        @Test
+        void throwsBadRequest_whenQuantityIsLessThanOne() {
+            // arrange
+            Cart cart = new Cart(USER_ID, PRODUCT_ID, 3);
+
+            // act & assert
+            assertThatThrownBy(() -> cart.updateQuantity(0))
+                .isInstanceOf(CoreException.class)
+                .satisfies(e -> assertThat(((CoreException) e).getErrorType()).isEqualTo(ErrorType.BAD_REQUEST));
+        }
+
+        @DisplayName("정상 수량으로 변경하면, 수량이 갱신된다.")
+        @Test
+        void updatesQuantity_toNewValue() {
+            // arrange
+            Cart cart = new Cart(USER_ID, PRODUCT_ID, 3);
+
+            // act
+            cart.updateQuantity(7);
+
+            // assert
+            assertThat(cart.getQuantity()).isEqualTo(7);
+        }
+    }
 }
