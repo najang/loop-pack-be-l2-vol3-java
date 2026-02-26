@@ -30,6 +30,14 @@ public class CartService {
     }
 
     @Transactional
+    public Cart updateQuantity(Long userId, Long productId, int quantity) {
+        Cart cart = cartRepository.findByUserIdAndProductId(userId, productId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "장바구니 항목을 찾을 수 없습니다."));
+        cart.updateQuantity(quantity);
+        return cartRepository.save(cart);
+    }
+
+    @Transactional
     public void remove(Long userId, Long productId) {
         Cart cart = cartRepository.findByUserIdAndProductId(userId, productId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "장바구니 항목을 찾을 수 없습니다."));
