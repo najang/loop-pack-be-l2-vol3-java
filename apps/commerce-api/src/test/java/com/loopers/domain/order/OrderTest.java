@@ -26,7 +26,7 @@ class OrderTest {
         @Test
         void createsOrder_whenRequiredFieldsAreProvided() {
             // arrange
-            List<OrderItem> items = List.of(new OrderItem(PRODUCT_ID, 2, 1000));
+            List<OrderItem> items = List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 2, 1000));
 
             // act
             Order order = new Order(USER_ID, items);
@@ -44,8 +44,8 @@ class OrderTest {
         void calculatesTotalPrice_asSumOfUnitPriceTimesQuantity() {
             // arrange
             List<OrderItem> items = List.of(
-                new OrderItem(PRODUCT_ID, 2, 1000),
-                new OrderItem(200L, 3, 500)
+                new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 2, 1000),
+                new OrderItem(200L, "다른상품", "다른브랜드", 3, 500)
             );
 
             // act
@@ -59,7 +59,7 @@ class OrderTest {
         @Test
         void throwsBadRequest_whenUserIdIsNull() {
             // arrange
-            List<OrderItem> items = List.of(new OrderItem(PRODUCT_ID, 1, 1000));
+            List<OrderItem> items = List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000));
 
             // act & assert
             assertThatThrownBy(() -> new Order(null, items))
@@ -94,7 +94,7 @@ class OrderTest {
         @Test
         void cancelsOrder_whenStatusIsOrdered() {
             // arrange
-            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, 1, 1000)));
+            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
 
             // act
             order.cancel();
@@ -107,7 +107,7 @@ class OrderTest {
         @Test
         void cancelsOrder_whenStatusIsShipping() {
             // arrange
-            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, 1, 1000)));
+            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
             order.changeStatus(OrderStatus.SHIPPING);
 
             // act
@@ -121,7 +121,7 @@ class OrderTest {
         @Test
         void throwsBadRequest_whenStatusIsDelivered() {
             // arrange
-            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, 1, 1000)));
+            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
             order.changeStatus(OrderStatus.DELIVERED);
 
             // act & assert
@@ -134,7 +134,7 @@ class OrderTest {
         @Test
         void throwsBadRequest_whenStatusIsAlreadyCancelled() {
             // arrange
-            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, 1, 1000)));
+            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
             order.cancel();
 
             // act & assert

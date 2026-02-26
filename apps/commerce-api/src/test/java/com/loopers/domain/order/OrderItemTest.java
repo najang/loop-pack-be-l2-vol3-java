@@ -13,20 +13,24 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 class OrderItemTest {
 
     private static final Long PRODUCT_ID = 100L;
+    private static final String PRODUCT_NAME = "테스트 상품";
+    private static final String BRAND_NAME = "테스트 브랜드";
 
     @DisplayName("OrderItem을 생성할 때,")
     @Nested
     class Create {
 
-        @DisplayName("productId, quantity, unitPrice가 정상 제공되면, 정상적으로 생성된다.")
+        @DisplayName("productId, productName, brandName, quantity, unitPrice가 정상 제공되면, 정상적으로 생성된다.")
         @Test
         void createsOrderItem_whenRequiredFieldsAreProvided() {
             // arrange & act
-            OrderItem item = new OrderItem(PRODUCT_ID, 2, 1000);
+            OrderItem item = new OrderItem(PRODUCT_ID, PRODUCT_NAME, BRAND_NAME, 2, 1000);
 
             // assert
             assertAll(
                 () -> assertThat(item.getProductId()).isEqualTo(PRODUCT_ID),
+                () -> assertThat(item.getProductName()).isEqualTo(PRODUCT_NAME),
+                () -> assertThat(item.getBrandName()).isEqualTo(BRAND_NAME),
                 () -> assertThat(item.getQuantity()).isEqualTo(2),
                 () -> assertThat(item.getUnitPrice()).isEqualTo(1000)
             );
@@ -36,7 +40,7 @@ class OrderItemTest {
         @Test
         void throwsBadRequest_whenProductIdIsNull() {
             // arrange & act & assert
-            assertThatThrownBy(() -> new OrderItem(null, 2, 1000))
+            assertThatThrownBy(() -> new OrderItem(null, PRODUCT_NAME, BRAND_NAME, 2, 1000))
                 .isInstanceOf(CoreException.class)
                 .satisfies(e -> assertThat(((CoreException) e).getErrorType()).isEqualTo(ErrorType.BAD_REQUEST));
         }
@@ -45,7 +49,7 @@ class OrderItemTest {
         @Test
         void throwsBadRequest_whenQuantityIsLessThanOne() {
             // arrange & act & assert
-            assertThatThrownBy(() -> new OrderItem(PRODUCT_ID, 0, 1000))
+            assertThatThrownBy(() -> new OrderItem(PRODUCT_ID, PRODUCT_NAME, BRAND_NAME, 0, 1000))
                 .isInstanceOf(CoreException.class)
                 .satisfies(e -> assertThat(((CoreException) e).getErrorType()).isEqualTo(ErrorType.BAD_REQUEST));
         }
@@ -54,7 +58,7 @@ class OrderItemTest {
         @Test
         void throwsBadRequest_whenUnitPriceIsNegative() {
             // arrange & act & assert
-            assertThatThrownBy(() -> new OrderItem(PRODUCT_ID, 2, -1))
+            assertThatThrownBy(() -> new OrderItem(PRODUCT_ID, PRODUCT_NAME, BRAND_NAME, 2, -1))
                 .isInstanceOf(CoreException.class)
                 .satisfies(e -> assertThat(((CoreException) e).getErrorType()).isEqualTo(ErrorType.BAD_REQUEST));
         }

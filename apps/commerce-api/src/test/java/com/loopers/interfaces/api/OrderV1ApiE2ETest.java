@@ -28,6 +28,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -298,16 +301,26 @@ class OrderV1ApiE2ETest {
         }
     }
 
-    @DisplayName("GET /api/v1/users/me/orders")
+    @DisplayName("GET /api/v1/orders")
     @Nested
     class GetMyOrders {
+
+        private String buildOrdersUrl(ZonedDateTime startAt, ZonedDateTime endAt) {
+            String start = startAt.withZoneSameInstant(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT);
+            String end = endAt.withZoneSameInstant(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT);
+            return "/api/v1/orders?startAt=" + start + "&endAt=" + end;
+        }
 
         @DisplayName("인증 없이 요청하면, 401 Unauthorized를 반환한다.")
         @Test
         void returns401_whenNoAuth() {
+            // arrange
+            ZonedDateTime now = ZonedDateTime.now();
+            String url = buildOrdersUrl(now.minusDays(1), now.plusDays(1));
+
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/api/v1/users/me/orders",
+                url,
                 HttpMethod.GET,
                 new HttpEntity<>(null),
                 new ParameterizedTypeReference<>() {}
@@ -328,9 +341,12 @@ class OrderV1ApiE2ETest {
             placeOrder(LOGIN_ID, product.getId(), 1);
             placeOrder(OTHER_LOGIN_ID, product.getId(), 1);
 
+            ZonedDateTime now = ZonedDateTime.now();
+            String url = buildOrdersUrl(now.minusDays(1), now.plusDays(1));
+
             // act
             ResponseEntity<ApiResponse<List<OrderV1Dto.OrderResponse>>> response = testRestTemplate.exchange(
-                "/api/v1/users/me/orders",
+                url,
                 HttpMethod.GET,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
@@ -344,7 +360,7 @@ class OrderV1ApiE2ETest {
         }
     }
 
-    @DisplayName("DELETE /api/v1/orders/{orderId}")
+    @DisplayName("PATCH /api/v1/orders/{orderId}/cancel")
     @Nested
     class CancelOrder {
 
@@ -359,8 +375,8 @@ class OrderV1ApiE2ETest {
 
             // act
             ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/api/v1/orders/" + orderId,
-                HttpMethod.DELETE,
+                "/api/v1/orders/" + orderId + "/cancel",
+                HttpMethod.PATCH,
                 new HttpEntity<>(null),
                 Void.class
             );
@@ -380,8 +396,8 @@ class OrderV1ApiE2ETest {
 
             // act
             ResponseEntity<Void> response = testRestTemplate.exchange(
-                "/api/v1/orders/" + orderId,
-                HttpMethod.DELETE,
+                "/api/v1/orders/" + orderId + "/cancel",
+                HttpMethod.PATCH,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
                 Void.class
             );
@@ -405,8 +421,8 @@ class OrderV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/api/v1/orders/" + orderId,
-                HttpMethod.DELETE,
+                "/api/v1/orders/" + orderId + "/cancel",
+                HttpMethod.PATCH,
                 new HttpEntity<>(createAuthHeaders(OTHER_LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
@@ -424,16 +440,16 @@ class OrderV1ApiE2ETest {
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();
             testRestTemplate.exchange(
-                "/api/v1/orders/" + orderId,
-                HttpMethod.DELETE,
+                "/api/v1/orders/" + orderId + "/cancel",
+                HttpMethod.PATCH,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
                 Void.class
             );
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/api/v1/orders/" + orderId,
-                HttpMethod.DELETE,
+                "/api/v1/orders/" + orderId + "/cancel",
+                HttpMethod.PATCH,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
@@ -457,8 +473,8 @@ class OrderV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/api/v1/orders/" + orderId,
-                HttpMethod.DELETE,
+                "/api/v1/orders/" + orderId + "/cancel",
+                HttpMethod.PATCH,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
@@ -475,8 +491,8 @@ class OrderV1ApiE2ETest {
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
-                "/api/v1/orders/99999",
-                HttpMethod.DELETE,
+                "/api/v1/orders/99999/cancel",
+                HttpMethod.PATCH,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );

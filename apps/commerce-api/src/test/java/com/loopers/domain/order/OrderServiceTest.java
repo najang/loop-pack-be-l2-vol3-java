@@ -1,5 +1,7 @@
 package com.loopers.domain.order;
 
+import com.loopers.domain.brand.Brand;
+import com.loopers.domain.brand.BrandRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.domain.product.SellingStatus;
@@ -38,6 +40,9 @@ class OrderServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private BrandRepository brandRepository;
+
     @InjectMocks
     private OrderService orderService;
 
@@ -49,7 +54,7 @@ class OrderServiceTest {
         @Test
         void throwsNotFound_whenProductDoesNotExist() {
             // arrange
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
             CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 1));
@@ -63,7 +68,7 @@ class OrderServiceTest {
         void throwsBadRequest_whenProductCannotBeOrdered() {
             // arrange
             Product product = mock(Product.class);
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.of(product));
             when(product.canOrder()).thenReturn(false);
 
             // act
@@ -78,9 +83,14 @@ class OrderServiceTest {
         void deductsStockAndSavesOrder_whenOrderIsValid() {
             // arrange
             Product product = mock(Product.class);
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+            Brand brand = mock(Brand.class);
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.of(product));
             when(product.canOrder()).thenReturn(true);
+            when(product.getBrandId()).thenReturn(1L);
+            when(product.getName()).thenReturn("테스트상품");
             when(product.getPrice()).thenReturn(1000);
+            when(brandRepository.findById(1L)).thenReturn(Optional.of(brand));
+            when(brand.getName()).thenReturn("테스트브랜드");
             when(productRepository.save(product)).thenReturn(product);
             when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -177,7 +187,7 @@ class OrderServiceTest {
             when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
             Product product = mock(Product.class);
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.of(product));
             when(productRepository.save(product)).thenReturn(product);
             when(orderRepository.save(order)).thenReturn(order);
 

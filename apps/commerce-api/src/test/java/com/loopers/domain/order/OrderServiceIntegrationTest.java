@@ -1,5 +1,7 @@
 package com.loopers.domain.order;
 
+import com.loopers.domain.brand.Brand;
+import com.loopers.domain.brand.BrandService;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
@@ -7,6 +9,7 @@ import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import com.loopers.utils.DatabaseCleanUp;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -24,10 +27,11 @@ class OrderServiceIntegrationTest {
 
     private static final Long USER_ID = 1L;
     private static final Long OTHER_USER_ID = 2L;
-    private static final Long BRAND_ID = 1L;
     private static final String PRODUCT_NAME = "에어맥스";
     private static final int PRICE = 10000;
     private static final int STOCK = 10;
+
+    private Long brandId;
 
     @Autowired
     private OrderService orderService;
@@ -39,7 +43,16 @@ class OrderServiceIntegrationTest {
     private ProductService productService;
 
     @Autowired
+    private BrandService brandService;
+
+    @Autowired
     private DatabaseCleanUp databaseCleanUp;
+
+    @BeforeEach
+    void setUp() {
+        Brand brand = brandService.create("Nike", null);
+        brandId = brand.getId();
+    }
 
     @AfterEach
     void tearDown() {
@@ -54,7 +67,7 @@ class OrderServiceIntegrationTest {
         @Test
         void createsOrder_withCorrectStatusAndTotalPrice() {
             // arrange
-            Product product = productService.create(BRAND_ID, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
+            Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
 
             // act
             Order order = orderService.create(USER_ID, product.getId(), 3);
@@ -75,7 +88,7 @@ class OrderServiceIntegrationTest {
         @Test
         void throwsBadRequest_whenProductIsStop() {
             // arrange
-            Product product = productService.create(BRAND_ID, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.STOP);
+            Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.STOP);
 
             // act
             CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, product.getId(), 1));
@@ -88,7 +101,7 @@ class OrderServiceIntegrationTest {
         @Test
         void throwsBadRequest_whenStockIsInsufficient() {
             // arrange
-            Product product = productService.create(BRAND_ID, PRODUCT_NAME, null, PRICE, 2, SellingStatus.SELLING);
+            Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, 2, SellingStatus.SELLING);
 
             // act
             CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, product.getId(), 5));
@@ -106,7 +119,7 @@ class OrderServiceIntegrationTest {
         @Test
         void returnsOrder_whenOrderExists() {
             // arrange
-            Product product = productService.create(BRAND_ID, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
+            Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
             Order created = orderService.create(USER_ID, product.getId(), 1);
 
             // act
@@ -125,7 +138,7 @@ class OrderServiceIntegrationTest {
         @Test
         void returnsOnlyUserOrders_excludingOtherUsers() {
             // arrange
-            Product product = productService.create(BRAND_ID, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
+            Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
             orderService.create(USER_ID, product.getId(), 1);
             orderService.create(USER_ID, product.getId(), 1);
             orderService.create(OTHER_USER_ID, product.getId(), 1);
@@ -147,7 +160,7 @@ class OrderServiceIntegrationTest {
         @Test
         void cancelsOrder_andRestoresStock() {
             // arrange
-            Product product = productService.create(BRAND_ID, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
+            Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
             Order order = orderService.create(USER_ID, product.getId(), 3);
 
             // act
@@ -165,7 +178,7 @@ class OrderServiceIntegrationTest {
         @Test
         void throwsBadRequest_whenCancellingDeliveredOrder() {
             // arrange
-            Product product = productService.create(BRAND_ID, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
+            Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
             Order order = orderService.create(USER_ID, product.getId(), 1);
             order.changeStatus(OrderStatus.DELIVERED);
             orderRepository.save(order);
