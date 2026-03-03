@@ -2,9 +2,9 @@ package com.loopers.domain.order;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandRepository;
+import com.loopers.domain.coupon.CouponService;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
-import com.loopers.domain.product.SellingStatus;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +43,9 @@ class OrderServiceTest {
     @Mock
     private BrandRepository brandRepository;
 
+    @Mock
+    private CouponService couponService;
+
     @InjectMocks
     private OrderService orderService;
 
@@ -57,7 +60,7 @@ class OrderServiceTest {
             when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 1));
+            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 1, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
@@ -72,7 +75,7 @@ class OrderServiceTest {
             when(product.canOrder()).thenReturn(false);
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 1));
+            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 1, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -95,7 +98,7 @@ class OrderServiceTest {
             when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // act
-            orderService.create(USER_ID, PRODUCT_ID, 2);
+            orderService.create(USER_ID, PRODUCT_ID, 2, null);
 
             // assert
             verify(product, times(1)).deductStock(2);
