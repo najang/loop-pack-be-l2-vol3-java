@@ -72,15 +72,53 @@ classDiagram
     +수량변경(quantity)
   }
 
+  class CouponTemplate {
+    -String name
+    -CouponType type
+    -int value
+    -Integer minOrderAmount
+    -ZonedDateTime expiredAt
+    -boolean isActive
+    +발급가능여부() boolean
+    +비활성화()
+    +할인액계산(amount) int
+    +정보수정(name, type, value, minOrderAmount, expiredAt)
+  }
+
+  class CouponType {
+    <<enumeration>>
+    FIXED
+    RATE
+  }
+
+  class UserCoupon {
+    -Long userId
+    -Long couponTemplateId
+    -UserCouponStatus status
+    -ZonedDateTime usedAt
+    +사용가능여부검증(orderAmount, template)
+    +사용처리()
+    +만료처리()
+  }
+
+  class UserCouponStatus {
+    <<enumeration>>
+    AVAILABLE
+    USED
+    EXPIRED
+  }
+
   class Order {
     -Long userId
+    -Long userCouponId "nullable"
     -OrderStatus status
-    -int totalPrice
+    -int originalTotalPrice "쿠폰 적용 전 금액"
+    -int discountAmount "할인 금액"
+    -int finalTotalPrice "최종 결제 금액"
     -ZonedDateTime orderedAt
     -List~OrderItem~ items
     +주문취소()
     +상태변경(newStatus)
-    +총가격계산() int
   }
 
   class OrderStatus {
@@ -108,10 +146,14 @@ classDiagram
   BaseEntity <|-- CartItem
   BaseEntity <|-- Order
   BaseEntity <|-- OrderItem
+  BaseEntity <|-- CouponTemplate
+  BaseEntity <|-- UserCoupon
 
   %% ─── Enum Relationships ───
   Product --> SellingStatus
   Order --> OrderStatus
+  CouponTemplate --> CouponType
+  UserCoupon --> UserCouponStatus
 
   %% ─── Aggregate Boundary ───
   %% Order가 Aggregate Root, OrderItem은 Order를 통해서만 생명주기 관리
@@ -124,12 +166,16 @@ classDiagram
   CartItem ..> User : userId 참조
   CartItem ..> Product : productId 참조
   Order ..> User : userId 참조
+  Order ..> UserCoupon : userCouponId 참조 (nullable)
+  UserCoupon ..> User : userId 참조
+  UserCoupon ..> CouponTemplate : couponTemplateId 참조
 
   %% ─── Cross-domain 서비스 의존 (UseCase 레벨) ───
   %% 좋아요 UseCase → Product.좋아요수증가/감소() 호출
   %% 주문 UseCase → Product.재고차감/복원() 호출 (비관적 락, productId 오름차순)
   %% 브랜드 삭제 UseCase → Product.삭제() 연쇄 호출
   %% 주문 생성 UseCase → CartItem 삭제 (별도 트랜잭션, 실패해도 주문 유효)
+  %% 주문 생성 UseCase → CouponService.validateAndUse() 호출 (동일 트랜잭션, 쿠폰 있을 때만)
 ```
 ---
 
@@ -157,11 +203,18 @@ classDiagram
 | 주문 취소 | Product.재고복원() | 주문 생성의 역연산 |
 | 브랜드 삭제 | Product.삭제() | 연쇄 soft delete |
 | 주문 생성 | CartItem 삭제 | 별도 트랜잭션 (실패해도 주문 유효) |
+| 주문 생성 (쿠폰 적용 시) | CouponService.validateAndUse() | 동일 트랜잭션 — 쿠폰 검증+사용처리+할인액 반환 |
 
 ### 6. Aggregate Boundary
 - **Order Aggregate**: Order(Root) + OrderItem → OrderItem은 독립 Repository 없이 Order를 통해서만 접근
 - 나머지 엔티티(User, Brand, Product, CartItem, Like)는 각각 독립 Aggregate Root
 
-### 7. Order.totalPrice 계산
-- `totalPrice = Σ(OrderItem.quantity × OrderItem.orderPrice)`
-- 주문 생성 시 계산하여 저장 (조회 성능 최적화)
+### 7. Order 금액 필드 설계
+- `originalTotalPrice = Σ(OrderItem.quantity × OrderItem.orderPrice)` — 쿠폰 적용 전 합계
+- `discountAmount` — 쿠폰이 없으면 0, 있으면 `CouponTemplate.할인액계산()` 결과
+- `finalTotalPrice = originalTotalPrice - discountAmount` — 실제 결제 금액
+- 세 값 모두 주문 생성 시 확정하여 저장 (조회 성능 최적화)
+
+### 8. CouponTemplate.할인액계산() 로직
+- `FIXED`: `min(value, originalTotalPrice)` — 정액 할인 (금액 초과 방지)
+- `RATE`: `originalTotalPrice * value / 100` — 정률 할인 (% 단위)

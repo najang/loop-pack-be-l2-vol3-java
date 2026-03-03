@@ -161,6 +161,52 @@
 
 ---
 
+## 쿠폰
+
+[유저 스토리]
+
+- 사용자는 쿠폰을 발급받을 수 있다.
+- 사용자는 내 쿠폰 목록을 조회할 수 있다.
+- 사용자는 주문 시 쿠폰을 1장 적용할 수 있다.
+- 사용자는 사용 불가능한 쿠폰으로 주문을 시도하면 주문이 실패한다.
+- 사용자는 주문이 성공하면 쿠폰이 즉시 사용 처리되어 재사용할 수 없다.
+
+[기능 흐름]
+
+#### 1) 쿠폰 발급 요청(POST /api/v1/coupons/{couponId}/issue)
+
+1. 로그인 사용자만 가능
+2. 쿠폰 템플릿 존재 여부 확인
+3. 쿠폰 템플릿 발급 가능 여부 확인(삭제/비활성/기간 종료 등 “사용 불가능”이면 실패)
+4. 사용자에게 쿠폰 발급(1장) 및 상태 AVAILABLE로 저장
+5. 발급 결과 응답
+
+#### 2) 내 쿠폰 목록 조회(GET /api/v1/users/me/coupons)
+
+1. 로그인 사용자만 가능
+2. 내 발급 쿠폰 목록 조회
+3. 각 쿠폰의 상태를 함께 반환(AVAILABLE / USED / EXPIRED)
+4. 목록 응답
+
+#### 3) 주문 시 쿠폰 적용(POST /api/v1/orders 요청 바디의 couponId)
+
+1. 로그인 사용자만 가능
+2. 주문 아이템 목록 검증(productId, quantity)
+3. 쿠폰 적용 여부 판단(couponId nullable)
+4. couponId가 있는 경우, 쿠폰 검증
+   - 쿠폰 존재 여부 확인(없으면 주문 실패)
+   - 내 쿠폰인지 확인(타 유저 소유면 주문 실패)
+   - 상태가 AVAILABLE인지 확인(USED/EXPIRED면 주문 실패)
+   - 최소 주문 금액 조건(minOrderAmount)이 있으면 충족 여부 확인(미충족 시 주문 실패)
+5. 주문 금액 계산 및 스냅샷 저장 
+   - 쿠폰 적용 전 금액 
+   - 할인 금액 
+   - 최종 결제 금액
+6. 주문 성공 시 쿠폰 상태를 즉시 USED로 변경(재사용 불가)
+7. 주문 결과 응답
+
+---
+
 ## 브랜드 & 상품 ADMIN
 
 [어드민 스토리]
@@ -212,20 +258,82 @@
 
 ---
 
+## 쿠폰 ADMIN
+
+[어드민 스토리]
+
+- 어드민은 쿠폰 템플릿을 등록/조회/수정/삭제할 수 있다. 
+- 어드민은 특정 쿠폰 템플릿의 발급 내역을 조회할 수 있다.
+
+[기능 흐름]
+
+#### 1) 쿠폰 템플릿 목록 조회(GET /api-admin/v1/coupons?page=0&size=20)
+
+1. LDAP 인증된 어드민만 가능
+2. 페이징 적용(기본 page=0, size=20)
+3. 쿠폰 템플릿 목록 응답
+
+#### 2) 쿠폰 템플릿 상세 조회(GET /api-admin/v1/coupons/{couponId})
+
+1. LDAP 인증된 어드민만 가능
+2. 쿠폰 템플릿 존재 여부 확인
+3. 쿠폰 템플릿 상세 응답
+
+#### 3) 쿠폰 템플릿 등록(POST /api-admin/v1/coupons)
+
+1. LDAP 인증된 어드민만 가능
+2. 요청 바디 유효성 검증 
+   - name 필수 
+   - type 필수(FIXED | RATE)
+   - value 필수(정률: %, 정액: 원)
+   - minOrderAmount 선택 
+   - expiredAt 필수
+3. 쿠폰 템플릿 저장
+4. 등록 결과 응답
+
+#### 4) 쿠폰 템플릿 수정(PUT /api-admin/v1/coupons/{couponId})
+
+1. LDAP 인증된 어드민만 가능
+2. 쿠폰 템플릿 존재 여부 확인
+3. 수정 요청 유효성 검증 및 반영 
+4. 수정 결과 응답
+
+#### 5) 쿠폰 템플릿 삭제(DELETE /api-admin/v1/coupons/{couponId})
+
+1. LDAP 인증된 어드민만 가능
+2. 쿠폰 템플릿 존재 여부 확인
+3. 삭제 처리(Soft delete 정책 적용)
+4. 삭제 결과 응답
+
+#### 6) 특정 쿠폰 발급 내역 조회(GET /api-admin/v1/coupons/{couponId}/issues?page=0&size=20)
+
+1. LDAP 인증된 어드민만 가능
+2. 쿠폰 템플릿 존재 여부 확인
+3. 페이징 적용(기본 page=0, size=20)
+4. 발급 내역 목록 응답
+
 ## 설계 결정 사항
-항목 | 결정 |
-|----|------|
-| 판매 가능 여부 | 상태값(SELLING/STOP/SOLD_OUT) + 재고 복합 판단 |
-| 좋아요 수 관리 | Product에 likeCount 비정규화 | 
-| 장바구니 동일 상품 | 수량 누적 |
-| 삭제 전략 | Soft delete(deleteAt) |
-| 주문-장바구니 관계 | 주문 시 장바구니 아이템 자동 삭제 |
-| 주문 기간 파라미터 | startAt, endAt 둘 다 필수 |
-| 스냅샷 범위 | 기본(상품명/가격/브랜드명) |
-| isLiked 응답 | 로그인 시에만 포함 |
-| 동시성 제어 | 비관적 락(Pessimistic Lock + SELECT FOR UPDATE) |
-| 상품 옵션 | 단일 상품만 (옵션 없음) |
-| 주문 상태 | ORDERED → SHIPPING → DELIVERED + CANCELLED |
-| 어드민 인증 | X-Loopers-Ldap 헤더의 loopers.admin 값으로 어드민 식별 |
-| 어드민 주문 관리 | 상태 변경 가능 (PATCH) |
-| 사용자 주문 취소 | ORDERED 상태일 때 취소 가능 (재고 복원) |
+ 항목          | 결정 |
+|-------------|------|
+| 판매 가능 여부    | 상태값(SELLING/STOP/SOLD_OUT) + 재고 복합 판단 |
+| 좋아요 수 관리    | Product에 likeCount 비정규화 | 
+| 장바구니 동일 상품  | 수량 누적 |
+| 삭제 전략       | Soft delete(deleteAt) |
+| 주문-장바구니 관계  | 주문 시 장바구니 아이템 자동 삭제 |
+| 주문 기간 파라미터  | startAt, endAt 둘 다 필수 |
+| 주문 스냅샷 범위   | 기본(상품명/가격/브랜드명) |
+| isLiked 응답  | 로그인 시에만 포함 |
+| 동시성 제어      | 비관적 락(Pessimistic Lock + SELECT FOR UPDATE) |
+| 상품 옵션       | 단일 상품만 (옵션 없음) |
+| 주문 상태       | ORDERED → SHIPPING → DELIVERED + CANCELLED |
+| 어드민 인증      | X-Loopers-Ldap 헤더의 loopers.admin 값으로 어드민 식별 |
+| 어드민 주문 관리   | 상태 변경 가능 (PATCH) |
+| 사용자 주문 취소   | ORDERED 상태일 때 취소 가능 (재고 복원) |
+| 쿠폰 타입       | 정액(FIXED) / 정률(RATE)                            |
+| 쿠폰 적용 단위    | 주문 1건당 쿠폰 1장                                    |
+| 쿠폰 재사용      | 불가(주문 성공 시 즉시 USED)                             |
+| 쿠폰 상태       | AVAILABLE / USED / EXPIRED                      |
+| 쿠폰 미적용      | 주문 요청에서 `couponId` 생략 가능(nullable)              |
+| 주문 실패 조건    | 쿠폰 없음 / USED / EXPIRED / 타 유저 소유 / 최소주문금액 미충족   |
+| 주문 스냅샷 금액   | 쿠폰 적용 전 금액 + 할인 금액 + 최종 결제 금액 포함                |
+| 쿠폰 사용 처리 시점 | 주문 성공 트랜잭션 내에서 USED로 변경                         |

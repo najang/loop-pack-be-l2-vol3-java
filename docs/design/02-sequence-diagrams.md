@@ -430,9 +430,88 @@ sequenceDiagram
 
 ---
 
+### 쿠폰 발급
+
+**목적**: 쿠폰 템플릿 유효성 검증 흐름과 발급 상태(AVAILABLE) 초기화를 확인한다.
+
+```mermaid
+sequenceDiagram
+    actor 사용자
+    participant API
+    participant 쿠폰
+    participant DB
+
+    사용자->>API: 쿠폰 발급 요청 (POST /api/v1/coupons/{couponId}/issue)
+    Note over API: 인증 확인
+
+    alt 인증 실패
+        API-->>사용자: 401 Unauthorized
+    else 인증 통과
+        API->>쿠폰: 쿠폰 발급 요청 (userId, couponTemplateId)
+        쿠폰->>DB: 쿠폰 템플릿 조회
+
+        alt 템플릿 없음
+            DB-->>쿠폰: 없음
+            쿠폰-->>API: NOT_FOUND
+            API-->>사용자: 404 Not Found
+        else 템플릿 존재
+            DB-->>쿠폰: 쿠폰 템플릿 정보
+            Note over 쿠폰: canIssue() 검증<br/>isActive == true<br/>deletedAt == null<br/>expiredAt > now()
+
+            alt 발급 불가 (비활성/삭제/만료)
+                쿠폰-->>API: BAD_REQUEST
+                API-->>사용자: 400 Bad Request
+            else 발급 가능
+                쿠폰->>DB: UserCoupon 저장 (status=AVAILABLE)
+                DB-->>쿠폰: 발급 완료
+                쿠폰-->>API: UserCoupon 정보
+                API-->>사용자: 201 Created
+            end
+        end
+    end
+```
+
+**핵심 포인트**:
+- 단일 서비스 호출이므로 UseCase 불필요
+- 발급 조건: `isActive == true` AND `deletedAt == null` AND `expiredAt > now()`
+- 발급된 UserCoupon은 AVAILABLE 상태로 초기화
+
+---
+
+### 내 쿠폰 목록 조회
+
+**목적**: 인증된 사용자의 쿠폰 목록 조회와 단순 조회 흐름을 확인한다.
+
+```mermaid
+sequenceDiagram
+    actor 사용자
+    participant API
+    participant 쿠폰
+    participant DB
+
+    사용자->>API: 내 쿠폰 목록 조회 요청 (GET /api/v1/users/me/coupons)
+    Note over API: 인증 확인
+
+    alt 인증 실패
+        API-->>사용자: 401 Unauthorized
+    else 인증 통과
+        API->>쿠폰: 사용자 쿠폰 목록 조회 (userId)
+        쿠폰->>DB: userId 기준 UserCoupon 목록 조회
+        DB-->>쿠폰: UserCoupon 목록
+        쿠폰-->>API: UserCoupon 목록
+        API-->>사용자: 200 OK
+    end
+```
+
+**핵심 포인트**:
+- 단일 서비스 호출이므로 UseCase 불필요
+- 본인 쿠폰만 조회 (userId 필터, 인증 토큰에서 추출)
+
+---
+
 ### 주문 생성
 
-**목적**: 재고 차감+주문 생성의 트랜잭션 경계, 비관적 락을 통한 동시성 제어, 스냅샷 저장, 그리고 장바구니 정리의 별도 트랜잭션 분리를 검증한다.
+**목적**: 재고 차감+주문 생성의 트랜잭션 경계, 비관적 락을 통한 동시성 제어, 쿠폰 적용, 스냅샷 저장, 그리고 장바구니 정리의 별도 트랜잭션 분리를 검증한다.
 
 ```mermaid
 sequenceDiagram
@@ -441,16 +520,17 @@ sequenceDiagram
     participant UseCase
     participant 주문
     participant 상품
+    participant 쿠폰
     participant 장바구니
     participant DB
 
-    사용자->>API: 주문 요청
+    사용자->>API: 주문 요청 (couponId 포함 가능)
     Note over API: 인증 확인
 
     API->>UseCase: 주문 생성 요청
 
     rect rgb(230, 245, 255)
-        Note over UseCase,DB: 트랜잭션: 재고 차감 + 주문 생성
+        Note over UseCase,DB: 트랜잭션: 재고 차감 + 쿠폰 처리 + 주문 생성
 
         UseCase->>주문: 주문 생성
         Note over 주문: productId 오름차순 정렬 (데드락 방지)
@@ -467,7 +547,17 @@ sequenceDiagram
             상품->>DB: 재고 차감 반영
         end
 
-        주문->>DB: 주문 저장 (상태: ORDERED)
+        alt couponId 있음
+            UseCase->>쿠폰: 쿠폰 검증 및 사용 처리 (userId, userCouponId, orderAmount)
+            쿠폰->>DB: UserCoupon + CouponTemplate 조회
+            Note over 쿠폰: 검증: 본인 쿠폰 여부<br/>status == AVAILABLE<br/>minOrderAmount 충족 여부
+            쿠폰->>DB: UserCoupon.status = USED, usedAt = now()
+            쿠폰-->>UseCase: 할인 금액 반환
+        else couponId 없음
+            Note over UseCase: discountAmount = 0
+        end
+
+        주문->>DB: 주문 저장 (originalTotalPrice, discountAmount, finalTotalPrice)
         주문->>DB: 주문 아이템 스냅샷 저장
         Note over DB: 스냅샷: 상품명, 주문가격, 브랜드명
         DB-->>주문: 주문 생성 완료
@@ -487,7 +577,8 @@ sequenceDiagram
 ```
 
 **핵심 포인트**:
-- 재고 차감 + 주문 생성은 하나의 트랜잭션. productId 오름차순 비관적 락으로 데드락 방지
+- 재고 차감 + 쿠폰 처리 + 주문 생성은 하나의 트랜잭션 — 어느 하나라도 실패 시 전체 롤백
+- 쿠폰 검증: 본인 소유 확인 + AVAILABLE 상태 확인 + 최소 주문 금액 충족 여부
 - 장바구니 삭제는 별도 트랜잭션 — 실패해도 주문은 유효 (최종 일관성)
 - 주문 도메인이 상품 도메인을 직접 호출하여 재고 차감 (cross-domain 의존)
 
@@ -822,3 +913,99 @@ sequenceDiagram
 - SHIPPING → CANCELLED 전이 제거됨 — ORDERED에서만 취소 가능
 - 어드민은 전체 사용자 주문 조회 가능, 본인 검증 없음
 - 주문 조회/상태 변경은 단일 서비스이므로 UseCase 불필요
+
+---
+
+### 어드민 쿠폰 관리
+
+**목적**: 쿠폰 템플릿 CRUD, soft delete 처리, 발급 내역 조회 흐름을 확인한다.
+
+```mermaid
+sequenceDiagram
+    actor 어드민
+    participant API
+    participant 쿠폰
+    participant DB
+
+    Note over 어드민,DB: 모든 요청에 LDAP 인증 필수 (X-Loopers-Ldap: loopers.admin)
+
+    rect rgb(240, 255, 240)
+        Note over 어드민,DB: 쿠폰 템플릿 목록 조회
+        어드민->>API: 쿠폰 목록 조회 요청 (페이징)
+        API->>쿠폰: 템플릿 목록 조회
+        쿠폰->>DB: 활성 템플릿 목록 조회 (deleted_at IS NULL, 페이징)
+        DB-->>쿠폰: 템플릿 목록
+        쿠폰-->>API: 템플릿 목록
+        API-->>어드민: 200 OK
+    end
+
+    rect rgb(230, 245, 255)
+        Note over 어드민,DB: 쿠폰 템플릿 등록
+        어드민->>API: 쿠폰 등록 요청
+        API->>쿠폰: 템플릿 저장
+        Note over 쿠폰: isActive=true 로 초기화
+        쿠폰->>DB: 쿠폰 템플릿 저장
+        DB-->>쿠폰: 저장된 템플릿 정보
+        쿠폰-->>API: 템플릿 정보
+        API-->>어드민: 201 Created
+    end
+
+    rect rgb(255, 255, 230)
+        Note over 어드민,DB: 쿠폰 템플릿 수정
+        어드민->>API: 쿠폰 수정 요청
+        API->>쿠폰: 템플릿 수정
+        쿠폰->>DB: 템플릿 조회 (deleted_at IS NULL)
+
+        alt 템플릿 없음
+            DB-->>쿠폰: 없음
+            쿠폰-->>API: NOT_FOUND
+            API-->>어드민: 404 Not Found
+        else 존재
+            DB-->>쿠폰: 템플릿 정보
+            쿠폰->>DB: 템플릿 정보 변경 반영
+            쿠폰-->>API: 수정된 템플릿 정보
+            API-->>어드민: 200 OK
+        end
+    end
+
+    rect rgb(255, 240, 240)
+        Note over 어드민,DB: 쿠폰 템플릿 삭제 (soft delete)
+        어드민->>API: 쿠폰 삭제 요청
+        API->>쿠폰: 템플릿 삭제
+        쿠폰->>DB: 템플릿 조회
+
+        alt 템플릿 없음
+            DB-->>쿠폰: 없음
+            쿠폰-->>API: NOT_FOUND
+            API-->>어드민: 404 Not Found
+        else 존재
+            쿠폰->>DB: deleted_at 설정 (soft delete)
+            Note over DB: 기존 USER_COUPON 레코드는 유지
+            쿠폰-->>API: 삭제 완료
+            API-->>어드민: 204 No Content
+        end
+    end
+
+    rect rgb(245, 240, 255)
+        Note over 어드민,DB: 발급 내역 조회
+        어드민->>API: 발급 내역 조회 요청 (couponId, 페이징)
+        API->>쿠폰: 발급 내역 조회
+        쿠폰->>DB: 템플릿 존재 확인
+
+        alt 템플릿 없음
+            DB-->>쿠폰: 없음
+            쿠폰-->>API: NOT_FOUND
+            API-->>어드민: 404 Not Found
+        else 존재
+            쿠폰->>DB: coupon_template_id 기준 UserCoupon 목록 조회 (페이징)
+            DB-->>쿠폰: UserCoupon 목록
+            쿠폰-->>API: 발급 내역 목록
+            API-->>어드민: 200 OK
+        end
+    end
+```
+
+**핵심 포인트**:
+- 모든 CRUD는 단일 서비스로 UseCase 불필요 (쿠폰 도메인만 관여)
+- soft delete 후에도 기존 USER_COUPON 레코드는 유지 — 발급 이력 보존
+- 발급 내역 조회 시 템플릿 존재 여부를 먼저 검증
