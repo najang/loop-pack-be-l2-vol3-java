@@ -26,12 +26,30 @@ public class OrderAdminV1Dto {
         }
     }
 
-    public record OrderResponse(Long id, Long userId, String status, int totalPrice, List<OrderItemResponse> items) {
+    public record OrderResponse(
+        Long id,
+        Long userId,
+        String status,
+        int originalTotalPrice,
+        int discountAmount,
+        int finalTotalPrice,
+        Long userCouponId,
+        List<OrderItemResponse> items
+    ) {
         public static OrderResponse from(OrderInfo info) {
             List<OrderItemResponse> items = info.items().stream()
                 .map(OrderItemResponse::from)
                 .toList();
-            return new OrderResponse(info.id(), info.userId(), info.status(), info.totalPrice(), items);
+            return new OrderResponse(
+                info.id(),
+                info.userId(),
+                info.status(),
+                info.originalTotalPrice(),
+                info.discountAmount(),
+                info.finalTotalPrice(),
+                info.userCouponId(),
+                items
+            );
         }
     }
 }

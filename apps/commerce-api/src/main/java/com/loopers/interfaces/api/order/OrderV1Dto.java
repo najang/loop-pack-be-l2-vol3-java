@@ -11,7 +11,8 @@ public class OrderV1Dto {
 
     public record CreateRequest(
         @NotNull Long productId,
-        @Min(1) int quantity
+        @Min(1) int quantity,
+        Long couponId
     ) {}
 
     public record OrderItemResponse(Long productId, String productName, String brandName, int quantity, int unitPrice, int subtotal) {
@@ -27,12 +28,28 @@ public class OrderV1Dto {
         }
     }
 
-    public record OrderResponse(Long id, String status, int totalPrice, List<OrderItemResponse> items) {
+    public record OrderResponse(
+        Long id,
+        String status,
+        int originalTotalPrice,
+        int discountAmount,
+        int finalTotalPrice,
+        Long userCouponId,
+        List<OrderItemResponse> items
+    ) {
         public static OrderResponse from(OrderInfo info) {
             List<OrderItemResponse> items = info.items().stream()
                 .map(OrderItemResponse::from)
                 .toList();
-            return new OrderResponse(info.id(), info.status(), info.totalPrice(), items);
+            return new OrderResponse(
+                info.id(),
+                info.status(),
+                info.originalTotalPrice(),
+                info.discountAmount(),
+                info.finalTotalPrice(),
+                info.userCouponId(),
+                items
+            );
         }
     }
 }

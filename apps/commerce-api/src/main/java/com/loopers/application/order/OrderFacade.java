@@ -18,8 +18,8 @@ public class OrderFacade {
 
     private final OrderService orderService;
 
-    public OrderInfo create(Long userId, Long productId, int quantity) {
-        return OrderInfo.from(orderService.create(userId, productId, quantity));
+    public OrderInfo create(Long userId, Long productId, int quantity, Long userCouponId) {
+        return OrderInfo.from(orderService.create(userId, productId, quantity, userCouponId));
     }
 
     @Transactional(readOnly = true)
