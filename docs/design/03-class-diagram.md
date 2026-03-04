@@ -25,6 +25,17 @@ classDiagram
     -String name
     -LocalDate birthDate
     -String email
+    -Money pointBalance
+    -Long version
+    +chargePoints(amount)
+    +deductPoints(amount)
+    +refundPoints(amount)
+    +getPointBalance() int
+  }
+
+  class Money {
+    <<ValueObject>>
+    -int value
   }
 
   class Brand {
@@ -176,6 +187,10 @@ classDiagram
   %% 브랜드 삭제 UseCase → Product.삭제() 연쇄 호출
   %% 주문 생성 UseCase → CartItem 삭제 (별도 트랜잭션, 실패해도 주문 유효)
   %% 주문 생성 UseCase → CouponService.validateAndUse() 호출 (동일 트랜잭션, 쿠폰 있을 때만)
+  %% 주문 생성 UseCase → UserService.deductPoints() 호출 (동일 트랜잭션)
+  %% 주문 취소 UseCase → UserService.refundPoints() 호출 (동일 트랜잭션)
+
+  User --> Money : pointBalance
 ```
 ---
 
@@ -204,6 +219,8 @@ classDiagram
 | 브랜드 삭제 | Product.삭제() | 연쇄 soft delete |
 | 주문 생성 | CartItem 삭제 | 별도 트랜잭션 (실패해도 주문 유효) |
 | 주문 생성 (쿠폰 적용 시) | CouponService.validateAndUse() | 동일 트랜잭션 — 쿠폰 검증+사용처리+할인액 반환 |
+| 주문 생성 | UserService.deductPoints() | 동일 트랜잭션, 잔액 부족 시 전체 롤백 |
+| 주문 취소 | UserService.refundPoints() | 동일 트랜잭션, finalTotalPrice 환불 |
 
 ### 6. Aggregate Boundary
 - **Order Aggregate**: Order(Root) + OrderItem → OrderItem은 독립 Repository 없이 Order를 통해서만 접근
