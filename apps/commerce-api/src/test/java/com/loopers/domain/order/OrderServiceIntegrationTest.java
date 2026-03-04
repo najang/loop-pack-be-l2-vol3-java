@@ -9,6 +9,9 @@ import com.loopers.domain.coupon.UserCoupon;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
+import com.loopers.domain.user.UserModel;
+import com.loopers.domain.user.UserService;
+import com.loopers.infrastructure.user.UserJpaRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import com.loopers.utils.DatabaseCleanUp;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.List;
 
@@ -30,13 +34,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @SpringBootTest
 class OrderServiceIntegrationTest {
 
-    private static final Long USER_ID = 1L;
-    private static final Long OTHER_USER_ID = 2L;
     private static final String PRODUCT_NAME = "에어맥스";
     private static final int PRICE = 10000;
     private static final int STOCK = 10;
+    private static final int LARGE_POINT_BALANCE = 1_000_000;
 
     private Long brandId;
+    private Long userId;
+    private Long otherUserId;
 
     @Autowired
     private OrderService orderService;
@@ -54,12 +59,30 @@ class OrderServiceIntegrationTest {
     private CouponService couponService;
 
     @Autowired
+    private UserService userService;
+
+    @Autowired
+    private UserJpaRepository userJpaRepository;
+
+    @Autowired
     private DatabaseCleanUp databaseCleanUp;
 
     @BeforeEach
     void setUp() {
         Brand brand = brandService.create("Nike", null);
         brandId = brand.getId();
+
+        UserModel user = userJpaRepository.save(new UserModel(
+            "user1", "encoded", "홍길동", LocalDate.of(1990, 1, 1), "user1@test.com"
+        ));
+        userId = user.getId();
+        userService.chargePoints(userId, LARGE_POINT_BALANCE);
+
+        UserModel otherUser = userJpaRepository.save(new UserModel(
+            "user2", "encoded", "김철수", LocalDate.of(1991, 2, 2), "user2@test.com"
+        ));
+        otherUserId = otherUser.getId();
+        userService.chargePoints(otherUserId, LARGE_POINT_BALANCE);
     }
 
     @AfterEach
@@ -78,11 +101,11 @@ class OrderServiceIntegrationTest {
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
 
             // act
-            Order order = orderService.create(USER_ID, product.getId(), 3, null);
+            Order order = orderService.create(userId, product.getId(), 3, null);
 
             // assert
             assertAll(
-                () -> assertThat(order.getUserId()).isEqualTo(USER_ID),
+                () -> assertThat(order.getUserId()).isEqualTo(userId),
                 () -> assertThat(order.getStatus()).isEqualTo(OrderStatus.ORDERED),
                 () -> assertThat(order.getOriginalTotalPrice()).isEqualTo(PRICE * 3),
                 () -> assertThat(order.getDiscountAmount()).isEqualTo(0),
@@ -103,10 +126,10 @@ class OrderServiceIntegrationTest {
             CouponTemplate template = couponService.saveTemplate(
                 new CouponTemplate("정액 할인", CouponType.FIXED, 3000, null, ZonedDateTime.now().plusDays(7))
             );
-            UserCoupon userCoupon = couponService.issue(USER_ID, template.getId());
+            UserCoupon userCoupon = couponService.issue(userId, template.getId());
 
             // act
-            Order order = orderService.create(USER_ID, product.getId(), 2, userCoupon.getId());
+            Order order = orderService.create(userId, product.getId(), 2, userCoupon.getId());
 
             // assert
             assertAll(
@@ -125,10 +148,10 @@ class OrderServiceIntegrationTest {
             CouponTemplate template = couponService.saveTemplate(
                 new CouponTemplate("10% 할인", CouponType.RATE, 10, null, ZonedDateTime.now().plusDays(7))
             );
-            UserCoupon userCoupon = couponService.issue(USER_ID, template.getId());
+            UserCoupon userCoupon = couponService.issue(userId, template.getId());
 
             // act
-            Order order = orderService.create(USER_ID, product.getId(), 2, userCoupon.getId());
+            Order order = orderService.create(userId, product.getId(), 2, userCoupon.getId());
 
             // assert
             assertAll(
@@ -146,12 +169,12 @@ class OrderServiceIntegrationTest {
             CouponTemplate template = couponService.saveTemplate(
                 new CouponTemplate("정액 할인", CouponType.FIXED, 1000, null, ZonedDateTime.now().plusDays(7))
             );
-            UserCoupon userCoupon = couponService.issue(USER_ID, template.getId());
-            orderService.create(USER_ID, product.getId(), 1, userCoupon.getId());
+            UserCoupon userCoupon = couponService.issue(userId, template.getId());
+            orderService.create(userId, product.getId(), 1, userCoupon.getId());
 
             // act
             CoreException ex = assertThrows(CoreException.class,
-                () -> orderService.create(USER_ID, product.getId(), 1, userCoupon.getId()));
+                () -> orderService.create(userId, product.getId(), 1, userCoupon.getId()));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -165,11 +188,11 @@ class OrderServiceIntegrationTest {
             CouponTemplate template = couponService.saveTemplate(
                 new CouponTemplate("정액 할인", CouponType.FIXED, 1000, null, ZonedDateTime.now().plusDays(7))
             );
-            UserCoupon otherUserCoupon = couponService.issue(OTHER_USER_ID, template.getId());
+            UserCoupon otherUserCoupon = couponService.issue(otherUserId, template.getId());
 
             // act
             CoreException ex = assertThrows(CoreException.class,
-                () -> orderService.create(USER_ID, product.getId(), 1, otherUserCoupon.getId()));
+                () -> orderService.create(userId, product.getId(), 1, otherUserCoupon.getId()));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -182,7 +205,7 @@ class OrderServiceIntegrationTest {
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.STOP);
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, product.getId(), 1, null));
+            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(userId, product.getId(), 1, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -195,7 +218,7 @@ class OrderServiceIntegrationTest {
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, 2, SellingStatus.SELLING);
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, product.getId(), 5, null));
+            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(userId, product.getId(), 5, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -211,7 +234,7 @@ class OrderServiceIntegrationTest {
         void returnsOrder_whenOrderExists() {
             // arrange
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
-            Order created = orderService.create(USER_ID, product.getId(), 1, null);
+            Order created = orderService.create(userId, product.getId(), 1, null);
 
             // act
             Order found = orderService.findById(created.getId());
@@ -230,16 +253,16 @@ class OrderServiceIntegrationTest {
         void returnsOnlyUserOrders_excludingOtherUsers() {
             // arrange
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
-            orderService.create(USER_ID, product.getId(), 1, null);
-            orderService.create(USER_ID, product.getId(), 1, null);
-            orderService.create(OTHER_USER_ID, product.getId(), 1, null);
+            orderService.create(userId, product.getId(), 1, null);
+            orderService.create(userId, product.getId(), 1, null);
+            orderService.create(otherUserId, product.getId(), 1, null);
 
             // act
-            List<Order> result = orderService.findByUserId(USER_ID);
+            List<Order> result = orderService.findByUserId(userId);
 
             // assert
             assertThat(result).hasSize(2);
-            assertThat(result).allMatch(o -> o.getUserId().equals(USER_ID));
+            assertThat(result).allMatch(o -> o.getUserId().equals(userId));
         }
     }
 
@@ -252,7 +275,7 @@ class OrderServiceIntegrationTest {
         void cancelsOrder_andRestoresStock() {
             // arrange
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
-            Order order = orderService.create(USER_ID, product.getId(), 3, null);
+            Order order = orderService.create(userId, product.getId(), 3, null);
 
             // act
             orderService.cancel(order.getId());
@@ -270,7 +293,7 @@ class OrderServiceIntegrationTest {
         void throwsBadRequest_whenCancellingDeliveredOrder() {
             // arrange
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
-            Order order = orderService.create(USER_ID, product.getId(), 1, null);
+            Order order = orderService.create(userId, product.getId(), 1, null);
             order.changeStatus(OrderStatus.DELIVERED);
             orderRepository.save(order);
 

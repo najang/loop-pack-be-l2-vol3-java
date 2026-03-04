@@ -48,6 +48,30 @@ public class UserService {
     }
 
     @Transactional
+    public UserModel chargePoints(Long userId, int amount) {
+        UserModel user = userRepository.findById(userId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        user.chargePoints(amount);
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public void deductPoints(Long userId, int amount) {
+        UserModel user = userRepository.findById(userId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        user.deductPoints(amount);
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void refundPoints(Long userId, int amount) {
+        UserModel user = userRepository.findById(userId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        user.refundPoints(amount);
+        userRepository.save(user);
+    }
+
+    @Transactional
     public void changePassword(UserModel user, String currentPassword, String newPassword) {
         if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
             throw new CoreException(ErrorType.UNAUTHORIZED, "현재 비밀번호가 일치하지 않습니다.");

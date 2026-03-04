@@ -5,6 +5,7 @@ import com.loopers.domain.brand.BrandRepository;
 import com.loopers.domain.coupon.CouponService;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
+import com.loopers.domain.user.UserService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final BrandRepository brandRepository;
     private final CouponService couponService;
+    private final UserService userService;
 
     @Transactional
     public Order create(Long userId, Long productId, int quantity, Long userCouponId) {
@@ -45,6 +47,9 @@ public class OrderService {
         if (userCouponId != null) {
             discountAmount = couponService.validateAndUse(userId, userCouponId, originalAmount);
         }
+
+        int finalAmount = originalAmount - discountAmount;
+        userService.deductPoints(userId, finalAmount);
 
         OrderItem item = new OrderItem(productId, product.getName(), brand.getName(), quantity, product.getPrice());
         Order order = new Order(userId, List.of(item), userCouponId, discountAmount);
@@ -95,5 +100,7 @@ public class OrderService {
 
         order.cancel();
         orderRepository.save(order);
+
+        userService.refundPoints(order.getUserId(), order.getFinalTotalPrice());
     }
 }

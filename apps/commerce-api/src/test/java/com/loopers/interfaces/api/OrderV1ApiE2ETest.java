@@ -90,6 +90,15 @@ class OrderV1ApiE2ETest {
         ));
     }
 
+    private void chargePoints(String loginId, int amount) {
+        testRestTemplate.exchange(
+            "/api/v1/users/me/points/charge",
+            HttpMethod.POST,
+            new HttpEntity<>(new com.loopers.interfaces.api.user.UserV1Dto.ChargePointRequest(amount), createAuthHeaders(loginId)),
+            new ParameterizedTypeReference<>() {}
+        );
+    }
+
     private HttpHeaders createAuthHeaders(String loginId) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Loopers-LoginId", loginId);
@@ -208,6 +217,7 @@ class OrderV1ApiE2ETest {
         void returns201WithOrderResponse_andDeductsStock() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
 
             // act
@@ -238,6 +248,7 @@ class OrderV1ApiE2ETest {
         void returns201WithDiscount_whenFixedCouponApplied() {
             // arrange
             UserModel user = createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             UserCoupon userCoupon = createUserCoupon(user.getId(), 3000, CouponType.FIXED);
 
@@ -259,6 +270,7 @@ class OrderV1ApiE2ETest {
         void returns400_whenCouponAlreadyUsed() {
             // arrange
             UserModel user = createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             UserCoupon userCoupon = createUserCoupon(user.getId(), 1000, CouponType.FIXED);
             placeOrder(LOGIN_ID, product.getId(), 1, userCoupon.getId());
@@ -306,6 +318,7 @@ class OrderV1ApiE2ETest {
         void returns401_whenNoAuth() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();
@@ -327,6 +340,7 @@ class OrderV1ApiE2ETest {
         void returns200WithOrderResponse_whenOwnerRequests() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 2);
             Long orderId = created.getBody().data().id();
@@ -353,6 +367,7 @@ class OrderV1ApiE2ETest {
         void returns404_whenOtherUserRequests() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             createUser(OTHER_LOGIN_ID);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
@@ -423,7 +438,9 @@ class OrderV1ApiE2ETest {
         void returns200WithOnlyUserOrders() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             createUser(OTHER_LOGIN_ID);
+            chargePoints(OTHER_LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             placeOrder(LOGIN_ID, product.getId(), 1);
             placeOrder(LOGIN_ID, product.getId(), 1);
@@ -457,6 +474,7 @@ class OrderV1ApiE2ETest {
         void returns401_whenNoAuth() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();
@@ -478,6 +496,7 @@ class OrderV1ApiE2ETest {
         void returns204AndRestoresStock_whenCancelSucceeds() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 3);
             Long orderId = created.getBody().data().id();
@@ -502,6 +521,7 @@ class OrderV1ApiE2ETest {
         void returns404_whenOtherUserTriesToCancel() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             createUser(OTHER_LOGIN_ID);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
@@ -524,6 +544,7 @@ class OrderV1ApiE2ETest {
         void returns400_whenOrderAlreadyCancelled() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();
@@ -551,6 +572,7 @@ class OrderV1ApiE2ETest {
         void returns400_whenOrderIsDelivered() {
             // arrange
             createUser(LOGIN_ID);
+            chargePoints(LOGIN_ID, 1_000_000);
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();

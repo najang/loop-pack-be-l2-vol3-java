@@ -24,6 +24,15 @@ public interface UserV1ApiSpec {
     );
 
     @Operation(
+        summary = "포인트 충전",
+        description = "로그인한 사용자의 포인트를 충전합니다."
+    )
+    ApiResponse<UserV1Dto.ChargePointResponse> chargePoints(
+        @Parameter(hidden = true) UserModel user,
+        UserV1Dto.ChargePointRequest request
+    );
+
+    @Operation(
         summary = "비밀번호 변경",
         description = "로그인한 사용자의 비밀번호를 변경합니다."
     )
