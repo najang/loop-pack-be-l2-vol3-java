@@ -236,9 +236,12 @@ class CouponV1ApiE2ETest {
         void returnsMyCoupons_withStatus() {
             // arrange
             UserModel user = createUser();
-            CouponTemplate template = createActiveTemplate();
-            userCouponJpaRepository.save(new UserCoupon(user.getId(), template.getId()));
-            UserCoupon usedCoupon = userCouponJpaRepository.save(new UserCoupon(user.getId(), template.getId()));
+            CouponTemplate template1 = createActiveTemplate();
+            CouponTemplate template2 = couponTemplateJpaRepository.save(
+                new CouponTemplate("테스트 할인2", CouponType.FIXED, 2000, null, ZonedDateTime.now().plusDays(7))
+            );
+            userCouponJpaRepository.save(new UserCoupon(user.getId(), template1.getId()));
+            UserCoupon usedCoupon = userCouponJpaRepository.save(new UserCoupon(user.getId(), template2.getId()));
             usedCoupon.use();
             userCouponJpaRepository.save(usedCoupon);
 

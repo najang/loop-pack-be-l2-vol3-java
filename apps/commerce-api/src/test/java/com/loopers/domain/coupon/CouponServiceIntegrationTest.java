@@ -155,6 +155,20 @@ class CouponServiceIntegrationTest {
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         }
+
+        @DisplayName("이미 발급된 쿠폰 템플릿이면, BAD_REQUEST 예외가 발생한다.")
+        @Test
+        void throwsBadRequest_whenAlreadyIssued() {
+            // arrange
+            CouponTemplate template = saveActiveTemplate();
+            couponService.issue(USER_ID, template.getId());
+
+            // act
+            CoreException ex = assertThrows(CoreException.class, () -> couponService.issue(USER_ID, template.getId()));
+
+            // assert
+            assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        }
     }
 
     @DisplayName("사용자 쿠폰 목록 조회 시,")
@@ -165,10 +179,13 @@ class CouponServiceIntegrationTest {
         @Test
         void returnsOnlyUserCoupons() {
             // arrange
-            CouponTemplate template = saveActiveTemplate();
-            couponService.issue(USER_ID, template.getId());
-            couponService.issue(USER_ID, template.getId());
-            couponService.issue(OTHER_USER_ID, template.getId());
+            CouponTemplate template1 = saveActiveTemplate();
+            CouponTemplate template2 = couponService.saveTemplate(
+                new CouponTemplate("할인 쿠폰2", CouponType.FIXED, 2000, null, ZonedDateTime.now().plusDays(7))
+            );
+            couponService.issue(USER_ID, template1.getId());
+            couponService.issue(USER_ID, template2.getId());
+            couponService.issue(OTHER_USER_ID, template1.getId());
 
             // act
             List<UserCoupon> result = couponService.findByUserId(USER_ID);

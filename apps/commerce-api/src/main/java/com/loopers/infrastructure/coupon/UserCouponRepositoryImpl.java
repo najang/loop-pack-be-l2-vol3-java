@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,11 +23,6 @@ public class UserCouponRepositoryImpl implements UserCouponRepository {
     }
 
     @Override
-    public Optional<UserCoupon> findByIdWithLock(Long id) {
-        return userCouponJpaRepository.findByIdWithLock(id);
-    }
-
-    @Override
     public List<UserCoupon> findByUserId(Long userId) {
         return userCouponJpaRepository.findByUserIdAndDeletedAtIsNull(userId);
     }
@@ -34,6 +30,16 @@ public class UserCouponRepositoryImpl implements UserCouponRepository {
     @Override
     public Page<UserCoupon> findByCouponTemplateId(Long couponTemplateId, Pageable pageable) {
         return userCouponJpaRepository.findByCouponTemplateIdAndDeletedAtIsNull(couponTemplateId, pageable);
+    }
+
+    @Override
+    public boolean existsByUserIdAndCouponTemplateId(Long userId, Long couponTemplateId) {
+        return userCouponJpaRepository.existsByUserIdAndCouponTemplateIdAndDeletedAtIsNull(userId, couponTemplateId);
+    }
+
+    @Override
+    public int useIfAvailable(Long id, ZonedDateTime usedAt) {
+        return userCouponJpaRepository.useIfAvailable(id, usedAt);
     }
 
     @Override

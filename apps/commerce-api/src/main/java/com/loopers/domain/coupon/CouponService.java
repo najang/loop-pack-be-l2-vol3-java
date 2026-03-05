@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -42,6 +43,10 @@ public class CouponService {
             throw new CoreException(ErrorType.BAD_REQUEST, "발급 가능한 쿠폰이 아닙니다.");
         }
 
+        if (userCouponRepository.existsByUserIdAndCouponTemplateId(userId, couponTemplateId)) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "이미 발급된 쿠폰입니다.");
+        }
+
         UserCoupon userCoupon = new UserCoupon(userId, couponTemplateId);
         return userCouponRepository.save(userCoupon);
     }
@@ -64,7 +69,7 @@ public class CouponService {
 
     @Transactional
     public int validateAndUse(Long userId, Long userCouponId, int orderAmount) {
-        UserCoupon userCoupon = userCouponRepository.findByIdWithLock(userCouponId)
+        UserCoupon userCoupon = userCouponRepository.findById(userCouponId)
             .orElseThrow(() -> new CoreException(ErrorType.BAD_REQUEST, "쿠폰을 찾을 수 없습니다."));
 
         if (!userCoupon.getUserId().equals(userId)) {
@@ -76,8 +81,11 @@ public class CouponService {
 
         userCoupon.canUse(orderAmount, template);
         int discountAmount = template.calculateDiscount(orderAmount);
-        userCoupon.use();
-        userCouponRepository.save(userCoupon);
+
+        int affected = userCouponRepository.useIfAvailable(userCouponId, ZonedDateTime.now());
+        if (affected == 0) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "이미 사용된 쿠폰입니다.");
+        }
 
         return discountAmount;
     }
