@@ -8,6 +8,8 @@ import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
 import com.loopers.domain.user.UserModel;
 import com.loopers.infrastructure.user.UserJpaRepository;
+import com.loopers.utils.ConcurrencyTestHelper;
+import com.loopers.utils.ConcurrencyTestHelper.ConcurrencyResult;
 import com.loopers.utils.DatabaseCleanUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,11 +20,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class LikeConcurrencyTest {
 
-    private static final int THREAD_COUNT = 5;
+    private static final int THREAD_COUNT = 100;
 
     @Autowired
     private LikeApplicationService likeApplicationService;
@@ -73,49 +70,15 @@ class LikeConcurrencyTest {
             .toList();
 
         // act
-        CountDownLatch ready = new CountDownLatch(THREAD_COUNT);
-        CountDownLatch start = new CountDownLatch(1);
-        ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
-
-        List<Future<Boolean>> futures = IntStream.range(0, THREAD_COUNT)
-            .mapToObj(i -> executor.submit(toCallable(ready, start, () -> likeApplicationService.like(userIds.get(i), productId))))
+        List<Callable<Object>> tasks = IntStream.range(0, THREAD_COUNT)
+            .<Callable<Object>>mapToObj(i -> () -> likeApplicationService.like(userIds.get(i), productId))
             .toList();
-
-        ready.await();
-        start.countDown();
-        executor.shutdown();
-        executor.awaitTermination(10, TimeUnit.SECONDS);
-
-        long successCount = countSuccesses(futures);
+        ConcurrencyResult result = ConcurrencyTestHelper.run(tasks);
 
         // assert
-        assertThat(successCount).isEqualTo(THREAD_COUNT);
+        assertThat(result.successCount()).isEqualTo(THREAD_COUNT);
+        assertThat(result.failureCount()).isEqualTo(0);
         Product updated = productRepository.findById(productId).orElseThrow();
         assertThat(updated.getLikeCount()).isEqualTo(THREAD_COUNT);
-    }
-
-    private Callable<Boolean> toCallable(CountDownLatch ready, CountDownLatch start, Callable<Object> task) {
-        return () -> {
-            ready.countDown();
-            start.await();
-            try {
-                task.call();
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        };
-    }
-
-    private long countSuccesses(List<Future<Boolean>> futures) {
-        return futures.stream()
-            .mapToLong(f -> {
-                try {
-                    return f.get() ? 1L : 0L;
-                } catch (Exception e) {
-                    return 0L;
-                }
-            })
-            .sum();
     }
 }

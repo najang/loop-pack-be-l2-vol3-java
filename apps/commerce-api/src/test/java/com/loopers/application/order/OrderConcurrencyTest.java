@@ -13,6 +13,8 @@ import com.loopers.domain.product.SellingStatus;
 import com.loopers.domain.user.UserModel;
 import com.loopers.domain.user.UserService;
 import com.loopers.infrastructure.user.UserJpaRepository;
+import com.loopers.utils.ConcurrencyTestHelper;
+import com.loopers.utils.ConcurrencyTestHelper.ConcurrencyResult;
 import com.loopers.utils.DatabaseCleanUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,11 +27,6 @@ import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class OrderConcurrencyTest {
 
-    private static final int THREAD_COUNT = 2;
+    private static final int THREAD_COUNT = 100;
 
     private Long brandId;
     private Long userId;
@@ -88,10 +85,11 @@ class OrderConcurrencyTest {
         Long productId = product.getId();
 
         // act
-        long successCount = runConcurrently(() -> orderApplicationService.create(userId, productId, 1, null));
+        ConcurrencyResult result = ConcurrencyTestHelper.run(THREAD_COUNT, () -> orderApplicationService.create(userId, productId, 1, null));
 
         // assert
-        assertThat(successCount).isEqualTo(1);
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.failureCount()).isEqualTo(THREAD_COUNT - 1);
         Product updated = productService.findById(productId);
         assertThat(updated.getStock()).isGreaterThanOrEqualTo(0);
     }
@@ -110,10 +108,11 @@ class OrderConcurrencyTest {
         Long userCouponId = userCoupon.getId();
 
         // act
-        long successCount = runConcurrently(() -> orderApplicationService.create(userId, productId, 1, userCouponId));
+        ConcurrencyResult result = ConcurrencyTestHelper.run(THREAD_COUNT, () -> orderApplicationService.create(userId, productId, 1, userCouponId));
 
         // assert
-        assertThat(successCount).isEqualTo(1);
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.failureCount()).isEqualTo(THREAD_COUNT - 1);
         UserCoupon used = couponService.findUserCouponById(userCouponId);
         assertThat(used.getStatus()).isEqualTo(UserCouponStatus.USED);
     }
@@ -123,73 +122,20 @@ class OrderConcurrencyTest {
     void concurrentOrders_onlyOneSucceedsWhenPointBalanceIsInsufficient() throws Exception {
         // arrange — 잔액 10000, 각 주문 8000 → 동시 차감 시 1건만 성공해야 함
         userService.chargePoints(userId, 10000);
-        Product productA = productService.create(brandId, "운동화 A", null, 8000, 100, SellingStatus.SELLING);
-        Product productB = productService.create(brandId, "운동화 B", null, 8000, 100, SellingStatus.SELLING);
-        Long productAId = productA.getId();
-        Long productBId = productB.getId();
-
-        // act — 서로 다른 상품이므로 상품 락으로 직렬화되지 않아 포인트 낙관적 락이 동작함
-        CountDownLatch ready = new CountDownLatch(THREAD_COUNT);
-        CountDownLatch start = new CountDownLatch(1);
-        ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
-
-        List<Future<Boolean>> futures = List.of(
-            executor.submit(toCallable(ready, start, () -> orderApplicationService.create(userId, productAId, 1, null))),
-            executor.submit(toCallable(ready, start, () -> orderApplicationService.create(userId, productBId, 1, null)))
-        );
-
-        ready.await();
-        start.countDown();
-        executor.shutdown();
-        executor.awaitTermination(10, TimeUnit.SECONDS);
-
-        long successCount = countSuccesses(futures);
-
-        // assert
-        assertThat(successCount).isEqualTo(1);
-        UserModel user = userJpaRepository.findById(userId).orElseThrow();
-        assertThat(user.getPointBalance()).isGreaterThanOrEqualTo(0);
-    }
-
-    private long runConcurrently(Callable<Object> task) throws Exception {
-        CountDownLatch ready = new CountDownLatch(THREAD_COUNT);
-        CountDownLatch start = new CountDownLatch(1);
-        ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
-
-        List<Future<Boolean>> futures = IntStream.range(0, THREAD_COUNT)
-            .mapToObj(i -> executor.submit(toCallable(ready, start, task)))
+        List<Long> productIds = IntStream.range(0, THREAD_COUNT)
+            .mapToObj(i -> productService.create(brandId, "운동화 " + i, null, 8000, 100, SellingStatus.SELLING).getId())
             .toList();
 
-        ready.await();
-        start.countDown();
-        executor.shutdown();
-        executor.awaitTermination(10, TimeUnit.SECONDS);
+        // act — 서로 다른 상품이므로 상품 락으로 직렬화되지 않아 포인트 낙관적 락이 동작함
+        List<Callable<Object>> tasks = IntStream.range(0, THREAD_COUNT)
+            .<Callable<Object>>mapToObj(i -> () -> orderApplicationService.create(userId, productIds.get(i), 1, null))
+            .toList();
+        ConcurrencyResult result = ConcurrencyTestHelper.run(tasks);
 
-        return countSuccesses(futures);
-    }
-
-    private Callable<Boolean> toCallable(CountDownLatch ready, CountDownLatch start, Callable<Object> task) {
-        return () -> {
-            ready.countDown();
-            start.await();
-            try {
-                task.call();
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        };
-    }
-
-    private long countSuccesses(List<Future<Boolean>> futures) {
-        return futures.stream()
-            .mapToLong(f -> {
-                try {
-                    return f.get() ? 1L : 0L;
-                } catch (Exception e) {
-                    return 0L;
-                }
-            })
-            .sum();
+        // assert
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.failureCount()).isEqualTo(THREAD_COUNT - 1);
+        UserModel user = userJpaRepository.findById(userId).orElseThrow();
+        assertThat(user.getPointBalance()).isGreaterThanOrEqualTo(0);
     }
 }

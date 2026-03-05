@@ -1,5 +1,9 @@
 package com.loopers.domain.coupon;
 
+import com.loopers.domain.user.UserModel;
+import com.loopers.infrastructure.user.UserJpaRepository;
+import com.loopers.utils.ConcurrencyTestHelper;
+import com.loopers.utils.ConcurrencyTestHelper.ConcurrencyResult;
 import com.loopers.utils.DatabaseCleanUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -7,26 +11,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 class CouponConcurrencyTest {
 
-    private static final int THREAD_COUNT = 5;
-    private static final Long USER_ID = 1L;
+    private static final int THREAD_COUNT = 100;
 
     @Autowired
     private CouponService couponService;
+
+    @Autowired
+    private UserJpaRepository userJpaRepository;
 
     @Autowired
     private DatabaseCleanUp databaseCleanUp;
@@ -40,51 +40,23 @@ class CouponConcurrencyTest {
     @Test
     void concurrentIssue_onlyOneSucceeds() throws Exception {
         // arrange
+        UserModel user = userJpaRepository.save(new UserModel(
+            "couponuser", "encoded", "쿠폰유저", LocalDate.of(1990, 1, 1), "couponuser@test.com"
+        ));
+        Long userId = user.getId();
+
         CouponTemplate template = couponService.saveTemplate(
             new CouponTemplate("동시성 테스트 쿠폰", CouponType.FIXED, 1000, null, ZonedDateTime.now().plusDays(7))
         );
         Long templateId = template.getId();
 
         // act
-        CountDownLatch ready = new CountDownLatch(THREAD_COUNT);
-        CountDownLatch start = new CountDownLatch(1);
-        ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
-
-        List<Future<Boolean>> futures = IntStream.range(0, THREAD_COUNT)
-            .mapToObj(i -> executor.submit(toCallable(ready, start, () -> couponService.issue(USER_ID, templateId))))
-            .toList();
-
-        ready.await();
-        start.countDown();
-        executor.shutdown();
-        executor.awaitTermination(10, TimeUnit.SECONDS);
-
-        long successCount = futures.stream()
-            .mapToLong(f -> {
-                try {
-                    return f.get() ? 1L : 0L;
-                } catch (Exception e) {
-                    return 0L;
-                }
-            })
-            .sum();
+        ConcurrencyResult result = ConcurrencyTestHelper.run(THREAD_COUNT, () -> couponService.issue(userId, templateId));
 
         // assert
-        assertThat(successCount).isEqualTo(1);
-        List<UserCoupon> issued = couponService.findByUserId(USER_ID);
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.failureCount()).isEqualTo(THREAD_COUNT - 1);
+        List<UserCoupon> issued = couponService.findByUserId(userId);
         assertThat(issued).hasSize(1);
-    }
-
-    private Callable<Boolean> toCallable(CountDownLatch ready, CountDownLatch start, Callable<Object> task) {
-        return () -> {
-            ready.countDown();
-            start.await();
-            try {
-                task.call();
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        };
     }
 }
