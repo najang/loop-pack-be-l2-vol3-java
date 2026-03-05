@@ -1,4 +1,4 @@
-package com.loopers.domain.like;
+package com.loopers.application.like;
 
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
@@ -17,13 +17,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest
-class LikeServiceIntegrationTest {
+class LikeApplicationServiceIntegrationTest {
 
     private static final Long BRAND_ID = 1L;
     private static final Long USER_ID = 1L;
 
     @Autowired
-    private LikeService likeService;
+    private LikeApplicationService likeApplicationService;
 
     @Autowired
     private ProductService productService;
@@ -47,7 +47,7 @@ class LikeServiceIntegrationTest {
             Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
 
             // act
-            likeService.like(USER_ID, product.getId());
+            likeApplicationService.like(USER_ID, product.getId());
 
             // assert
             Product updated = productService.findById(product.getId());
@@ -61,8 +61,8 @@ class LikeServiceIntegrationTest {
             Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
 
             // act
-            likeService.like(USER_ID, product.getId());
-            likeService.like(USER_ID, product.getId());
+            likeApplicationService.like(USER_ID, product.getId());
+            likeApplicationService.like(USER_ID, product.getId());
 
             // assert
             Product updated = productService.findById(product.getId());
@@ -77,7 +77,7 @@ class LikeServiceIntegrationTest {
             productService.delete(product.getId());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> likeService.like(USER_ID, product.getId()));
+            CoreException ex = assertThrows(CoreException.class, () -> likeApplicationService.like(USER_ID, product.getId()));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
@@ -93,10 +93,10 @@ class LikeServiceIntegrationTest {
         void decreasesLikeCount_whenUnliked() {
             // arrange
             Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
-            likeService.like(USER_ID, product.getId());
+            likeApplicationService.like(USER_ID, product.getId());
 
             // act
-            likeService.unlike(USER_ID, product.getId());
+            likeApplicationService.unlike(USER_ID, product.getId());
 
             // assert
             Product updated = productService.findById(product.getId());
@@ -110,7 +110,7 @@ class LikeServiceIntegrationTest {
             Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
 
             // act
-            likeService.unlike(USER_ID, product.getId());
+            likeApplicationService.unlike(USER_ID, product.getId());
 
             // assert
             Product updated = productService.findById(product.getId());

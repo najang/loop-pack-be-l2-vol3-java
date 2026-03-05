@@ -1,4 +1,4 @@
-package com.loopers.domain.order;
+package com.loopers.application.order;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandService;
@@ -43,7 +43,7 @@ class OrderConcurrencyTest {
     private Long userId;
 
     @Autowired
-    private OrderService orderService;
+    private OrderApplicationService orderApplicationService;
 
     @Autowired
     private ProductService productService;
@@ -88,7 +88,7 @@ class OrderConcurrencyTest {
         Long productId = product.getId();
 
         // act
-        long successCount = runConcurrently(() -> orderService.create(userId, productId, 1, null));
+        long successCount = runConcurrently(() -> orderApplicationService.create(userId, productId, 1, null));
 
         // assert
         assertThat(successCount).isEqualTo(1);
@@ -110,7 +110,7 @@ class OrderConcurrencyTest {
         Long userCouponId = userCoupon.getId();
 
         // act
-        long successCount = runConcurrently(() -> orderService.create(userId, productId, 1, userCouponId));
+        long successCount = runConcurrently(() -> orderApplicationService.create(userId, productId, 1, userCouponId));
 
         // assert
         assertThat(successCount).isEqualTo(1);
@@ -134,8 +134,8 @@ class OrderConcurrencyTest {
         ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
 
         List<Future<Boolean>> futures = List.of(
-            executor.submit(toCallable(ready, start, () -> orderService.create(userId, productAId, 1, null))),
-            executor.submit(toCallable(ready, start, () -> orderService.create(userId, productBId, 1, null)))
+            executor.submit(toCallable(ready, start, () -> orderApplicationService.create(userId, productAId, 1, null))),
+            executor.submit(toCallable(ready, start, () -> orderApplicationService.create(userId, productBId, 1, null)))
         );
 
         ready.await();

@@ -1,4 +1,4 @@
-package com.loopers.domain.order;
+package com.loopers.application.order;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandService;
@@ -6,6 +6,9 @@ import com.loopers.domain.coupon.CouponService;
 import com.loopers.domain.coupon.CouponTemplate;
 import com.loopers.domain.coupon.CouponType;
 import com.loopers.domain.coupon.UserCoupon;
+import com.loopers.domain.order.Order;
+import com.loopers.domain.order.OrderRepository;
+import com.loopers.domain.order.OrderStatus;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
@@ -32,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest
-class OrderServiceIntegrationTest {
+class OrderApplicationServiceIntegrationTest {
 
     private static final String PRODUCT_NAME = "에어맥스";
     private static final int PRICE = 10000;
@@ -44,7 +47,7 @@ class OrderServiceIntegrationTest {
     private Long otherUserId;
 
     @Autowired
-    private OrderService orderService;
+    private OrderApplicationService orderApplicationService;
 
     @Autowired
     private OrderRepository orderRepository;
@@ -101,7 +104,7 @@ class OrderServiceIntegrationTest {
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
 
             // act
-            Order order = orderService.create(userId, product.getId(), 3, null);
+            Order order = orderApplicationService.create(userId, product.getId(), 3, null);
 
             // assert
             assertAll(
@@ -129,7 +132,7 @@ class OrderServiceIntegrationTest {
             UserCoupon userCoupon = couponService.issue(userId, template.getId());
 
             // act
-            Order order = orderService.create(userId, product.getId(), 2, userCoupon.getId());
+            Order order = orderApplicationService.create(userId, product.getId(), 2, userCoupon.getId());
 
             // assert
             assertAll(
@@ -151,7 +154,7 @@ class OrderServiceIntegrationTest {
             UserCoupon userCoupon = couponService.issue(userId, template.getId());
 
             // act
-            Order order = orderService.create(userId, product.getId(), 2, userCoupon.getId());
+            Order order = orderApplicationService.create(userId, product.getId(), 2, userCoupon.getId());
 
             // assert
             assertAll(
@@ -170,11 +173,11 @@ class OrderServiceIntegrationTest {
                 new CouponTemplate("정액 할인", CouponType.FIXED, 1000, null, ZonedDateTime.now().plusDays(7))
             );
             UserCoupon userCoupon = couponService.issue(userId, template.getId());
-            orderService.create(userId, product.getId(), 1, userCoupon.getId());
+            orderApplicationService.create(userId, product.getId(), 1, userCoupon.getId());
 
             // act
             CoreException ex = assertThrows(CoreException.class,
-                () -> orderService.create(userId, product.getId(), 1, userCoupon.getId()));
+                () -> orderApplicationService.create(userId, product.getId(), 1, userCoupon.getId()));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -192,7 +195,7 @@ class OrderServiceIntegrationTest {
 
             // act
             CoreException ex = assertThrows(CoreException.class,
-                () -> orderService.create(userId, product.getId(), 1, otherUserCoupon.getId()));
+                () -> orderApplicationService.create(userId, product.getId(), 1, otherUserCoupon.getId()));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -205,7 +208,7 @@ class OrderServiceIntegrationTest {
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.STOP);
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(userId, product.getId(), 1, null));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.create(userId, product.getId(), 1, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -218,7 +221,7 @@ class OrderServiceIntegrationTest {
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, 2, SellingStatus.SELLING);
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(userId, product.getId(), 5, null));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.create(userId, product.getId(), 5, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -234,10 +237,10 @@ class OrderServiceIntegrationTest {
         void returnsOrder_whenOrderExists() {
             // arrange
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
-            Order created = orderService.create(userId, product.getId(), 1, null);
+            Order created = orderApplicationService.create(userId, product.getId(), 1, null);
 
             // act
-            Order found = orderService.findById(created.getId());
+            Order found = orderApplicationService.findById(created.getId());
 
             // assert
             assertThat(found.getId()).isEqualTo(created.getId());
@@ -253,12 +256,12 @@ class OrderServiceIntegrationTest {
         void returnsOnlyUserOrders_excludingOtherUsers() {
             // arrange
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
-            orderService.create(userId, product.getId(), 1, null);
-            orderService.create(userId, product.getId(), 1, null);
-            orderService.create(otherUserId, product.getId(), 1, null);
+            orderApplicationService.create(userId, product.getId(), 1, null);
+            orderApplicationService.create(userId, product.getId(), 1, null);
+            orderApplicationService.create(otherUserId, product.getId(), 1, null);
 
             // act
-            List<Order> result = orderService.findByUserId(userId);
+            List<Order> result = orderApplicationService.findByUserId(userId);
 
             // assert
             assertThat(result).hasSize(2);
@@ -275,13 +278,13 @@ class OrderServiceIntegrationTest {
         void cancelsOrder_andRestoresStock() {
             // arrange
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
-            Order order = orderService.create(userId, product.getId(), 3, null);
+            Order order = orderApplicationService.create(userId, product.getId(), 3, null);
 
             // act
-            orderService.cancel(order.getId());
+            orderApplicationService.cancel(order.getId());
 
             // assert
-            Order cancelled = orderService.findById(order.getId());
+            Order cancelled = orderApplicationService.findById(order.getId());
             assertThat(cancelled.getStatus()).isEqualTo(OrderStatus.CANCELLED);
 
             Product restored = productService.findById(product.getId());
@@ -293,12 +296,12 @@ class OrderServiceIntegrationTest {
         void throwsBadRequest_whenCancellingDeliveredOrder() {
             // arrange
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
-            Order order = orderService.create(userId, product.getId(), 1, null);
+            Order order = orderApplicationService.create(userId, product.getId(), 1, null);
             order.changeStatus(OrderStatus.DELIVERED);
             orderRepository.save(order);
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.cancel(order.getId()));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.cancel(order.getId()));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);

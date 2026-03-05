@@ -1,8 +1,11 @@
-package com.loopers.domain.order;
+package com.loopers.application.order;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandRepository;
 import com.loopers.domain.coupon.CouponService;
+import com.loopers.domain.order.Order;
+import com.loopers.domain.order.OrderItem;
+import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.domain.user.UserService;
@@ -18,7 +21,7 @@ import java.util.List;
 
 @RequiredArgsConstructor
 @Component
-public class OrderService {
+public class OrderApplicationService {
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;

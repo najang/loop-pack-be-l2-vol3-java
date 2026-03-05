@@ -1,5 +1,7 @@
-package com.loopers.domain.like;
+package com.loopers.application.like;
 
+import com.loopers.domain.like.Like;
+import com.loopers.domain.like.LikeRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
@@ -24,7 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class LikeServiceTest {
+class LikeApplicationServiceTest {
 
     private static final Long USER_ID = 1L;
     private static final Long PRODUCT_ID = 100L;
@@ -36,7 +38,7 @@ class LikeServiceTest {
     private ProductRepository productRepository;
 
     @InjectMocks
-    private LikeService likeService;
+    private LikeApplicationService likeApplicationService;
 
     @DisplayName("like() 시,")
     @Nested
@@ -53,7 +55,7 @@ class LikeServiceTest {
             when(productRepository.save(product)).thenReturn(product);
 
             // act
-            likeService.like(USER_ID, PRODUCT_ID);
+            likeApplicationService.like(USER_ID, PRODUCT_ID);
 
             // assert
             verify(likeRepository, times(1)).save(any(Like.class));
@@ -71,7 +73,7 @@ class LikeServiceTest {
             when(likeRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.of(like));
 
             // act
-            likeService.like(USER_ID, PRODUCT_ID);
+            likeApplicationService.like(USER_ID, PRODUCT_ID);
 
             // assert
             verify(likeRepository, never()).save(any());
@@ -86,7 +88,7 @@ class LikeServiceTest {
             when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> likeService.like(USER_ID, PRODUCT_ID));
+            CoreException ex = assertThrows(CoreException.class, () -> likeApplicationService.like(USER_ID, PRODUCT_ID));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
@@ -109,7 +111,7 @@ class LikeServiceTest {
             when(productRepository.save(product)).thenReturn(product);
 
             // act
-            likeService.unlike(USER_ID, PRODUCT_ID);
+            likeApplicationService.unlike(USER_ID, PRODUCT_ID);
 
             // assert
             verify(likeRepository, times(1)).delete(like);
@@ -126,7 +128,7 @@ class LikeServiceTest {
             when(likeRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
-            likeService.unlike(USER_ID, PRODUCT_ID);
+            likeApplicationService.unlike(USER_ID, PRODUCT_ID);
 
             // assert
             verify(likeRepository, never()).delete(any());
@@ -141,7 +143,7 @@ class LikeServiceTest {
             when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> likeService.unlike(USER_ID, PRODUCT_ID));
+            CoreException ex = assertThrows(CoreException.class, () -> likeApplicationService.unlike(USER_ID, PRODUCT_ID));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);

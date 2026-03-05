@@ -1,8 +1,11 @@
-package com.loopers.domain.order;
+package com.loopers.application.order;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandRepository;
 import com.loopers.domain.coupon.CouponService;
+import com.loopers.domain.order.Order;
+import com.loopers.domain.order.OrderItem;
+import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.domain.user.UserService;
@@ -32,7 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class OrderServiceTest {
+class OrderApplicationServiceTest {
 
     private static final Long USER_ID = 1L;
     private static final Long PRODUCT_ID = 100L;
@@ -54,7 +57,7 @@ class OrderServiceTest {
     private UserService userService;
 
     @InjectMocks
-    private OrderService orderService;
+    private OrderApplicationService orderApplicationService;
 
     @DisplayName("주문 생성 시,")
     @Nested
@@ -67,7 +70,7 @@ class OrderServiceTest {
             when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 1, null));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.create(USER_ID, PRODUCT_ID, 1, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
@@ -82,7 +85,7 @@ class OrderServiceTest {
             when(product.canOrder()).thenReturn(false);
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 1, null));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.create(USER_ID, PRODUCT_ID, 1, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -105,7 +108,7 @@ class OrderServiceTest {
             when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // act
-            orderService.create(USER_ID, PRODUCT_ID, 2, null);
+            orderApplicationService.create(USER_ID, PRODUCT_ID, 2, null);
 
             // assert
             verify(product, times(1)).deductStock(2);
@@ -130,7 +133,7 @@ class OrderServiceTest {
                 .when(userService).deductPoints(eq(USER_ID), anyInt());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 2, null));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.create(USER_ID, PRODUCT_ID, 2, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
@@ -150,7 +153,7 @@ class OrderServiceTest {
             when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
             // act
-            Order result = orderService.findById(ORDER_ID);
+            Order result = orderApplicationService.findById(ORDER_ID);
 
             // assert
             assertThat(result).isEqualTo(order);
@@ -163,7 +166,7 @@ class OrderServiceTest {
             when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.findById(ORDER_ID));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.findById(ORDER_ID));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
@@ -183,7 +186,7 @@ class OrderServiceTest {
             when(orderRepository.findByUserId(USER_ID)).thenReturn(List.of(order1, order2));
 
             // act
-            List<Order> result = orderService.findByUserId(USER_ID);
+            List<Order> result = orderApplicationService.findByUserId(USER_ID);
 
             // assert
             assertThat(result).containsExactly(order1, order2);
@@ -201,7 +204,7 @@ class OrderServiceTest {
             when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.cancel(ORDER_ID));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.cancel(ORDER_ID));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
@@ -228,7 +231,7 @@ class OrderServiceTest {
             when(orderRepository.save(order)).thenReturn(order);
 
             // act
-            orderService.cancel(ORDER_ID);
+            orderApplicationService.cancel(ORDER_ID);
 
             // assert
             verify(product, times(1)).restoreStock(2);

@@ -1,5 +1,7 @@
-package com.loopers.domain.like;
+package com.loopers.application.like;
 
+import com.loopers.domain.like.Like;
+import com.loopers.domain.like.LikeRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
@@ -14,7 +16,7 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 @Component
-public class LikeService {
+public class LikeApplicationService {
 
     private final LikeRepository likeRepository;
     private final ProductRepository productRepository;
