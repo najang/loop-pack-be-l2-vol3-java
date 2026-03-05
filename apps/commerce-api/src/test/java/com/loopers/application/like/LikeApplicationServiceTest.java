@@ -49,7 +49,7 @@ class LikeApplicationServiceTest {
         void savesLikeAndIncreasesLikeCount_whenLikeDoesNotExist() {
             // arrange
             Product product = mock(Product.class);
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.of(product));
             when(likeRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.empty());
             when(likeRepository.save(any(Like.class))).thenAnswer(inv -> inv.getArgument(0));
             when(productRepository.save(product)).thenReturn(product);
@@ -69,7 +69,7 @@ class LikeApplicationServiceTest {
             // arrange
             Product product = mock(Product.class);
             Like like = mock(Like.class);
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.of(product));
             when(likeRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.of(like));
 
             // act
@@ -85,7 +85,7 @@ class LikeApplicationServiceTest {
         @Test
         void throwsNotFound_whenProductDoesNotExist() {
             // arrange
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
             CoreException ex = assertThrows(CoreException.class, () -> likeApplicationService.like(USER_ID, PRODUCT_ID));
@@ -106,7 +106,7 @@ class LikeApplicationServiceTest {
             // arrange
             Product product = mock(Product.class);
             Like like = mock(Like.class);
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.of(product));
             when(likeRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.of(like));
             when(productRepository.save(product)).thenReturn(product);
 
@@ -124,7 +124,7 @@ class LikeApplicationServiceTest {
         void doesNotDeleteOrDecrease_whenLikeDoesNotExist() {
             // arrange
             Product product = mock(Product.class);
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.of(product));
             when(likeRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
@@ -140,7 +140,7 @@ class LikeApplicationServiceTest {
         @Test
         void throwsNotFound_whenProductDoesNotExist() {
             // arrange
-            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
             CoreException ex = assertThrows(CoreException.class, () -> likeApplicationService.unlike(USER_ID, PRODUCT_ID));

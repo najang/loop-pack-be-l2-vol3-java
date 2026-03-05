@@ -23,7 +23,7 @@ public class LikeApplicationService {
 
     @Transactional
     public Product like(Long userId, Long productId) {
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdWithLock(productId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
 
         Optional<Like> existingLike = likeRepository.findByUserIdAndProductId(userId, productId);
@@ -41,7 +41,7 @@ public class LikeApplicationService {
 
     @Transactional
     public void unlike(Long userId, Long productId) {
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdWithLock(productId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
 
         likeRepository.findByUserIdAndProductId(userId, productId)
