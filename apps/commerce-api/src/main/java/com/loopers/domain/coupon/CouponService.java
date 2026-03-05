@@ -3,6 +3,7 @@ package com.loopers.domain.coupon;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
@@ -48,7 +49,11 @@ public class CouponService {
         }
 
         UserCoupon userCoupon = new UserCoupon(userId, couponTemplateId);
-        return userCouponRepository.save(userCoupon);
+        try {
+            return userCouponRepository.save(userCoupon);
+        } catch (DataIntegrityViolationException e) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "이미 발급된 쿠폰입니다.");
+        }
     }
 
     @Transactional(readOnly = true)
