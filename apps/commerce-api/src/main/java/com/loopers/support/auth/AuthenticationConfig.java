@@ -13,13 +13,29 @@ import java.util.List;
 public class AuthenticationConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
+    private final AdminAuthInterceptor adminAuthInterceptor;
+    private final OptionalAuthInterceptor optionalAuthInterceptor;
     private final AuthenticatedUserArgumentResolver authenticatedUserArgumentResolver;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authInterceptor)
             .addPathPatterns("/api/v1/users/me")
-            .addPathPatterns("/api/v1/users/password");
+            .addPathPatterns("/api/v1/users/password")
+            .addPathPatterns("/api/v1/products/*/likes")
+            .addPathPatterns("/api/v1/users/*/likes")
+            .addPathPatterns("/api/v1/orders")
+            .addPathPatterns("/api/v1/orders/*")
+            .addPathPatterns("/api/v1/orders/*/cancel")
+            .addPathPatterns("/api/v1/cart")
+            .addPathPatterns("/api/v1/cart/items")
+            .addPathPatterns("/api/v1/cart/items/*");
+
+        registry.addInterceptor(adminAuthInterceptor)
+            .addPathPatterns("/api-admin/v1/**");
+
+        registry.addInterceptor(optionalAuthInterceptor)
+            .addPathPatterns("/api/v1/products/*");
     }
 
     @Override

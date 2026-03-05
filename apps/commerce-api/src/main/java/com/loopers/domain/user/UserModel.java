@@ -4,6 +4,7 @@ import com.loopers.domain.BaseEntity;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
@@ -13,48 +14,44 @@ import java.time.LocalDate;
 @Table(name = "users")
 public class UserModel extends BaseEntity {
 
-    @Column(name = "login_id", nullable = false, unique = true)
-    private String loginId;
+    @Embedded
+    private LoginId loginId;
 
-    @Column(name = "password", nullable = false)
-    private String password;
+    @Embedded
+    private EncodedPassword password;
 
-    @Column(name = "name", nullable = false)
-    private String name;
+    @Embedded
+    private UserName name;
 
     @Column(name = "birth_date", nullable = false)
     private LocalDate birthDate;
 
-    @Column(name = "email", nullable = false)
-    private String email;
+    @Embedded
+    private Email email;
 
     protected UserModel() {
     }
 
     public UserModel(String loginId, String encodedPassword, String name, LocalDate birthDate, String email) {
-        validateLoginId(loginId);
-        validateEncodedPassword(encodedPassword);
-        validateName(name);
         validateBirthDate(birthDate);
-        validateEmail(email);
 
-        this.loginId = loginId;
-        this.password = encodedPassword;
-        this.name = name;
+        this.loginId = new LoginId(loginId);
+        this.password = new EncodedPassword(encodedPassword);
+        this.name = new UserName(name);
         this.birthDate = birthDate;
-        this.email = email;
+        this.email = new Email(email);
     }
 
     public String getLoginId() {
-        return loginId;
+        return loginId.getValue();
     }
 
     public String getPassword() {
-        return password;
+        return password.getValue();
     }
 
     public String getName() {
-        return name;
+        return name.getValue();
     }
 
     public LocalDate getBirthDate() {
@@ -62,57 +59,20 @@ public class UserModel extends BaseEntity {
     }
 
     public String getEmail() {
-        return email;
+        return email.getValue();
     }
 
     public String getMaskedName() {
-        if (name == null || name.isEmpty()) {
-            return "*";
-        }
-        if (name.length() == 1) {
-            return "*";
-        }
-        return name.substring(0, name.length() - 1) + "*";
+        return name.masked();
     }
 
     public void changePassword(String newEncodedPassword) {
-        validateEncodedPassword(newEncodedPassword);
-        this.password = newEncodedPassword;
-    }
-
-    private void validateLoginId(String loginId) {
-        if (loginId == null || loginId.isBlank()) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "로그인 ID는 비어있을 수 없습니다.");
-        }
-        if (!loginId.matches("^[a-zA-Z0-9]+$")) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "로그인 ID는 영문과 숫자만 허용됩니다.");
-        }
-    }
-
-    private void validateEncodedPassword(String encodedPassword) {
-        if (encodedPassword == null || encodedPassword.isBlank()) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "비밀번호는 비어있을 수 없습니다.");
-        }
-    }
-
-    private void validateName(String name) {
-        if (name == null || name.isBlank()) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "이름은 비어있을 수 없습니다.");
-        }
+        this.password = new EncodedPassword(newEncodedPassword);
     }
 
     private void validateBirthDate(LocalDate birthDate) {
         if (birthDate == null) {
             throw new CoreException(ErrorType.BAD_REQUEST, "생년월일은 비어있을 수 없습니다.");
-        }
-    }
-
-    private void validateEmail(String email) {
-        if (email == null || email.isBlank()) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "이메일은 비어있을 수 없습니다.");
-        }
-        if (!email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$")) {
-            throw new CoreException(ErrorType.BAD_REQUEST, "유효하지 않은 이메일 형식입니다.");
         }
     }
 }
