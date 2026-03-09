@@ -34,8 +34,21 @@ public class Order extends BaseEntity {
 
     @Embedded
     @Getter(AccessLevel.NONE)
-    @AttributeOverride(name = "value", column = @Column(name = "total_price", nullable = false))
-    private Money totalPrice;
+    @AttributeOverride(name = "value", column = @Column(name = "original_total_price", nullable = false))
+    private Money originalTotalPrice;
+
+    @Embedded
+    @Getter(AccessLevel.NONE)
+    @AttributeOverride(name = "value", column = @Column(name = "discount_amount", nullable = false))
+    private Money discountAmount;
+
+    @Embedded
+    @Getter(AccessLevel.NONE)
+    @AttributeOverride(name = "value", column = @Column(name = "final_total_price", nullable = false))
+    private Money finalTotalPrice;
+
+    @Column(name = "user_coupon_id")
+    private Long userCouponId;
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "order_id", nullable = false)
@@ -45,22 +58,36 @@ public class Order extends BaseEntity {
     }
 
     public Order(Long userId, List<OrderItem> items) {
+        this(userId, items, null, 0);
+    }
+
+    public Order(Long userId, List<OrderItem> items, Long userCouponId, int discountAmount) {
         if (userId == null) {
             throw new CoreException(ErrorType.BAD_REQUEST, "사용자 ID는 필수입니다.");
         }
         if (items == null || items.isEmpty()) {
             throw new CoreException(ErrorType.BAD_REQUEST, "주문 항목은 비어있을 수 없습니다.");
         }
+        int original = items.stream().mapToInt(i -> i.getUnitPrice() * i.getQuantity()).sum();
         this.userId = userId;
         this.status = OrderStatus.ORDERED;
         this.items = new ArrayList<>(items);
-        this.totalPrice = new Money(
-            items.stream().mapToInt(i -> i.getUnitPrice() * i.getQuantity()).sum()
-        );
+        this.originalTotalPrice = new Money(original);
+        this.discountAmount = new Money(discountAmount);
+        this.finalTotalPrice = new Money(original - discountAmount);
+        this.userCouponId = userCouponId;
     }
 
-    public int getTotalPrice() {
-        return totalPrice.getValue();
+    public int getOriginalTotalPrice() {
+        return originalTotalPrice.getValue();
+    }
+
+    public int getDiscountAmount() {
+        return discountAmount.getValue();
+    }
+
+    public int getFinalTotalPrice() {
+        return finalTotalPrice.getValue();
     }
 
     public void changeStatus(OrderStatus status) {

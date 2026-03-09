@@ -1,10 +1,14 @@
-package com.loopers.domain.order;
+package com.loopers.application.order;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandRepository;
+import com.loopers.domain.coupon.CouponService;
+import com.loopers.domain.order.Order;
+import com.loopers.domain.order.OrderItem;
+import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
-import com.loopers.domain.product.SellingStatus;
+import com.loopers.domain.user.UserService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +25,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -28,7 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class OrderServiceTest {
+class OrderApplicationServiceTest {
 
     private static final Long USER_ID = 1L;
     private static final Long PRODUCT_ID = 100L;
@@ -43,8 +50,14 @@ class OrderServiceTest {
     @Mock
     private BrandRepository brandRepository;
 
+    @Mock
+    private CouponService couponService;
+
+    @Mock
+    private UserService userService;
+
     @InjectMocks
-    private OrderService orderService;
+    private OrderApplicationService orderApplicationService;
 
     @DisplayName("주문 생성 시,")
     @Nested
@@ -57,7 +70,7 @@ class OrderServiceTest {
             when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 1));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.create(USER_ID, PRODUCT_ID, 1, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
@@ -72,13 +85,13 @@ class OrderServiceTest {
             when(product.canOrder()).thenReturn(false);
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.create(USER_ID, PRODUCT_ID, 1));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.create(USER_ID, PRODUCT_ID, 1, null));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         }
 
-        @DisplayName("정상 주문이면, product.deductStock + productRepository.save + orderRepository.save가 호출된다.")
+        @DisplayName("정상 주문이면, product.deductStock + productRepository.save + orderRepository.save + userService.deductPoints가 호출된다.")
         @Test
         void deductsStockAndSavesOrder_whenOrderIsValid() {
             // arrange
@@ -95,12 +108,36 @@ class OrderServiceTest {
             when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
             // act
-            orderService.create(USER_ID, PRODUCT_ID, 2);
+            orderApplicationService.create(USER_ID, PRODUCT_ID, 2, null);
 
             // assert
             verify(product, times(1)).deductStock(2);
             verify(productRepository, times(1)).save(product);
             verify(orderRepository, times(1)).save(any(Order.class));
+            verify(userService, times(1)).deductPoints(eq(USER_ID), anyInt());
+        }
+
+        @DisplayName("포인트 잔액이 부족하면, BAD_REQUEST 예외가 발생하고 주문이 저장되지 않는다.")
+        @Test
+        void throwsBadRequest_whenInsufficientPoints() {
+            // arrange
+            Product product = mock(Product.class);
+            Brand brand = mock(Brand.class);
+            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.of(product));
+            when(product.canOrder()).thenReturn(true);
+            when(product.getBrandId()).thenReturn(1L);
+            when(product.getPrice()).thenReturn(1000);
+            when(brandRepository.findById(1L)).thenReturn(Optional.of(brand));
+            when(productRepository.save(product)).thenReturn(product);
+            doThrow(new CoreException(ErrorType.BAD_REQUEST, "포인트 잔액이 부족합니다."))
+                .when(userService).deductPoints(eq(USER_ID), anyInt());
+
+            // act
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.create(USER_ID, PRODUCT_ID, 2, null));
+
+            // assert
+            assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+            verify(orderRepository, never()).save(any());
         }
     }
 
@@ -116,7 +153,7 @@ class OrderServiceTest {
             when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
             // act
-            Order result = orderService.findById(ORDER_ID);
+            Order result = orderApplicationService.findById(ORDER_ID);
 
             // assert
             assertThat(result).isEqualTo(order);
@@ -129,7 +166,7 @@ class OrderServiceTest {
             when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.findById(ORDER_ID));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.findById(ORDER_ID));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
@@ -149,7 +186,7 @@ class OrderServiceTest {
             when(orderRepository.findByUserId(USER_ID)).thenReturn(List.of(order1, order2));
 
             // act
-            List<Order> result = orderService.findByUserId(USER_ID);
+            List<Order> result = orderApplicationService.findByUserId(USER_ID);
 
             // assert
             assertThat(result).containsExactly(order1, order2);
@@ -167,14 +204,14 @@ class OrderServiceTest {
             when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
 
             // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderService.cancel(ORDER_ID));
+            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.cancel(ORDER_ID));
 
             // assert
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
             verify(orderRepository, never()).save(any());
         }
 
-        @DisplayName("정상 취소이면, order.cancel() + product.restoreStock + productRepository.save + orderRepository.save가 호출된다.")
+        @DisplayName("정상 취소이면, order.cancel() + product.restoreStock + productRepository.save + orderRepository.save + userService.refundPoints가 호출된다.")
         @Test
         void restoresStockAndCancelsOrder_whenCancelIsValid() {
             // arrange
@@ -184,6 +221,8 @@ class OrderServiceTest {
 
             Order order = mock(Order.class);
             when(order.getItems()).thenReturn(List.of(item));
+            when(order.getUserId()).thenReturn(USER_ID);
+            when(order.getFinalTotalPrice()).thenReturn(2000);
             when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
             Product product = mock(Product.class);
@@ -192,13 +231,14 @@ class OrderServiceTest {
             when(orderRepository.save(order)).thenReturn(order);
 
             // act
-            orderService.cancel(ORDER_ID);
+            orderApplicationService.cancel(ORDER_ID);
 
             // assert
             verify(product, times(1)).restoreStock(2);
             verify(productRepository, times(1)).save(product);
             verify(order, times(1)).cancel();
             verify(orderRepository, times(1)).save(order);
+            verify(userService, times(1)).refundPoints(USER_ID, 2000);
         }
     }
 }

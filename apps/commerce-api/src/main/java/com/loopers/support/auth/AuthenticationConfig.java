@@ -29,7 +29,10 @@ public class AuthenticationConfig implements WebMvcConfigurer {
             .addPathPatterns("/api/v1/orders/*/cancel")
             .addPathPatterns("/api/v1/cart")
             .addPathPatterns("/api/v1/cart/items")
-            .addPathPatterns("/api/v1/cart/items/*");
+            .addPathPatterns("/api/v1/cart/items/*")
+            .addPathPatterns("/api/v1/coupons/*/issue")
+            .addPathPatterns("/api/v1/users/me/coupons")
+            .addPathPatterns("/api/v1/users/me/points/charge");
 
         registry.addInterceptor(adminAuthInterceptor)
             .addPathPatterns("/api-admin/v1/**");

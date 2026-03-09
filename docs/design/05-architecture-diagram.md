@@ -40,7 +40,7 @@ DATABASE (MySQL)
 
 | 도메인 | Controller | 주요 엔드포인트                                                                                                                                   |
 | --- | --- |--------------------------------------------------------------------------------------------------------------------------------------------|
-| User | UserV1Controller | POST /api/v1/users, GET /api/v1/users/me, PATCH /api/v1/users/password                                                                     |
+| User | UserV1Controller | POST /api/v1/users, GET /api/v1/users/me, POST /api/v1/users/me/points/charge, PATCH /api/v1/users/password                                 |
 | Brand | BrandV1Controller | GET /api/v1/brands/{brandId}                                                                                                               |
 | Product | ProductV1Controller | GET /api/v1/products,                                                   GET /api/v1/products/{productId}                                   |
 | Like | LikeV1Controller | POST/DELETE /api/v1/products/{productId}/likes,                                                           GET /api/v1/users/{userId}/likes |
@@ -95,7 +95,7 @@ DTO 설계 원칙: Java Record 사용, Bean Validation 어노테이션으로 입
 
 | 클래스 | 역할 |
 | --- | --- |
-| UserInfo | UserModel → 응답 변환 (maskedName 포함) |
+| UserInfo | UserModel → 응답 변환 (maskedName, pointBalance 포함) |
 | ProductInfo | 상품 + 브랜드 + isLiked 조합 결과 |
 | CartInfo | 장바구니 + 상품 + 브랜드 조합 결과 |
 | OrderInfo | 주문 + 주문아이템(스냅샷) 결과 |
@@ -141,7 +141,7 @@ changeQuantity(qty) | Aggregate Root |
 
 | 서비스 | 주요 책임 |
 | --- | --- |
-| UserService | 회원가입, 인증, 비밀번호 변경 |
+| UserService | 회원가입, 인증, 비밀번호 변경, 포인트 충전/차감/환불 |
 | BrandService | 브랜드 CRUD, 활성 브랜드 조회 |
 | ProductService | 상품 CRUD, 목록 조회(필터/정렬/페이징), 비관적 락 기반 재고 관리 |
 | LikeService | 좋아요 등록/삭제(멱등), 사용자별 좋아요 목록 조회 |
@@ -152,7 +152,7 @@ changeQuantity(qty) | Aggregate Root |
 
 | Repository | 주요 메서드                                                                                      |
 | --- |---------------------------------------------------------------------------------------------|
-| UserRepository | findByLoginId(), existsByLoginId(), save()                                                  |
+| UserRepository | findById(), findByLoginId(), existsByLoginId(), save()                                      |
 | BrandRepository | findById(), findAll(pageable), save(), delete()                                             |
 | ProductRepository | findById(),  findByIdWithLock(), findAll(filter, sort, pageable), save(), deleteByBrandId() |
 | LikeRepository | findByUserIdAndProductId(), findByUserId(), save(), delete()                                |
@@ -219,3 +219,5 @@ changeQuantity(qty) | Aggregate Root |
 주문 취소                ──→ Product.재고복원()                    (주문 생성의 역연산)
 브랜드 삭제             ──→ Product.삭제()                           (연쇄 soft delete)
 주문 생성                ──→ CartItem 삭제                             (별도 트랜잭션, 실패해도 주문 유효)
+주문 생성                ──→ UserService.deductPoints()          (동일 트랜잭션, 잔액 부족 시 전체 롤백)
+주문 취소                ──→ UserService.refundPoints()           (동일 트랜잭션, finalTotalPrice 환불)

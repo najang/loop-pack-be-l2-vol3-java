@@ -39,7 +39,7 @@ class OrderTest {
             );
         }
 
-        @DisplayName("totalPrice는 unitPrice * quantity의 합산이다.")
+        @DisplayName("쿠폰 없이 생성하면, originalTotalPrice=합산, discountAmount=0, finalTotalPrice=합산이다.")
         @Test
         void calculatesTotalPrice_asSumOfUnitPriceTimesQuantity() {
             // arrange
@@ -52,7 +52,32 @@ class OrderTest {
             Order order = new Order(USER_ID, items);
 
             // assert
-            assertThat(order.getTotalPrice()).isEqualTo(3500);
+            assertAll(
+                () -> assertThat(order.getOriginalTotalPrice()).isEqualTo(3500),
+                () -> assertThat(order.getDiscountAmount()).isEqualTo(0),
+                () -> assertThat(order.getFinalTotalPrice()).isEqualTo(3500),
+                () -> assertThat(order.getUserCouponId()).isNull()
+            );
+        }
+
+        @DisplayName("쿠폰을 적용하면, discountAmount와 finalTotalPrice가 올바르게 계산된다.")
+        @Test
+        void calculatesPricesWithCoupon() {
+            // arrange
+            List<OrderItem> items = List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 2, 10000));
+            Long userCouponId = 5L;
+            int discountAmount = 3000;
+
+            // act
+            Order order = new Order(USER_ID, items, userCouponId, discountAmount);
+
+            // assert
+            assertAll(
+                () -> assertThat(order.getOriginalTotalPrice()).isEqualTo(20000),
+                () -> assertThat(order.getDiscountAmount()).isEqualTo(3000),
+                () -> assertThat(order.getFinalTotalPrice()).isEqualTo(17000),
+                () -> assertThat(order.getUserCouponId()).isEqualTo(userCouponId)
+            );
         }
 
         @DisplayName("userId가 null이면, BAD_REQUEST 예외가 발생한다.")

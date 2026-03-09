@@ -48,6 +48,17 @@ public class UserV1Controller implements UserV1ApiSpec {
         return ApiResponse.success(UserV1Dto.UserInfoResponse.from(info));
     }
 
+    @PostMapping("/me/points/charge")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Override
+    public ApiResponse<UserV1Dto.ChargePointResponse> chargePoints(
+        @LoginUser UserModel user,
+        @Valid @RequestBody UserV1Dto.ChargePointRequest request
+    ) {
+        UserInfo info = userFacade.chargePoints(user.getId(), request.amount());
+        return ApiResponse.success(UserV1Dto.ChargePointResponse.from(info));
+    }
+
     @PatchMapping("/password")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Override

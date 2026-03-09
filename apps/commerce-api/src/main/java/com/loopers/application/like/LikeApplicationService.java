@@ -1,5 +1,7 @@
-package com.loopers.domain.like;
+package com.loopers.application.like;
 
+import com.loopers.domain.like.Like;
+import com.loopers.domain.like.LikeRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
@@ -14,14 +16,14 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 @Component
-public class LikeService {
+public class LikeApplicationService {
 
     private final LikeRepository likeRepository;
     private final ProductRepository productRepository;
 
     @Transactional
     public Product like(Long userId, Long productId) {
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdWithLock(productId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
 
         Optional<Like> existingLike = likeRepository.findByUserIdAndProductId(userId, productId);
@@ -39,7 +41,7 @@ public class LikeService {
 
     @Transactional
     public void unlike(Long userId, Long productId) {
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdWithLock(productId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
 
         likeRepository.findByUserIdAndProductId(userId, productId)

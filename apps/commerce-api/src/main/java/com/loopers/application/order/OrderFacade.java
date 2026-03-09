@@ -1,7 +1,6 @@
 package com.loopers.application.order;
 
 import com.loopers.domain.order.Order;
-import com.loopers.domain.order.OrderService;
 import com.loopers.domain.order.OrderStatus;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
@@ -16,10 +15,10 @@ import java.util.List;
 @Component
 public class OrderFacade {
 
-    private final OrderService orderService;
+    private final OrderApplicationService orderService;
 
-    public OrderInfo create(Long userId, Long productId, int quantity) {
-        return OrderInfo.from(orderService.create(userId, productId, quantity));
+    public OrderInfo create(Long userId, Long productId, int quantity, Long userCouponId) {
+        return OrderInfo.from(orderService.create(userId, productId, quantity, userCouponId));
     }
 
     @Transactional(readOnly = true)

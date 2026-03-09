@@ -35,7 +35,7 @@ public class OrderV1Controller implements OrderV1ApiSpec {
         @Valid @RequestBody OrderV1Dto.CreateRequest request
     ) {
         return ApiResponse.success(OrderV1Dto.OrderResponse.from(
-            orderFacade.create(user.getId(), request.productId(), request.quantity())
+            orderFacade.create(user.getId(), request.productId(), request.quantity(), request.couponId())
         ));
     }
 

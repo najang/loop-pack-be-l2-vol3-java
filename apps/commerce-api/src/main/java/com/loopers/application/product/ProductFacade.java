@@ -1,7 +1,7 @@
 package com.loopers.application.product;
 
 import com.loopers.domain.brand.BrandService;
-import com.loopers.domain.like.LikeService;
+import com.loopers.application.like.LikeApplicationService;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
@@ -16,7 +16,7 @@ public class ProductFacade {
 
     private final ProductService productService;
     private final BrandService brandService;
-    private final LikeService likeService;
+    private final LikeApplicationService likeService;
 
     public ProductInfo findById(Long productId) {
         return findById(productId, null);

@@ -9,7 +9,8 @@ public record UserInfo(
     String name,
     String maskedName,
     LocalDate birthDate,
-    String email
+    String email,
+    int pointBalance
 ) {
     public static UserInfo from(UserModel model) {
         if(model == null) {
@@ -21,7 +22,8 @@ public record UserInfo(
             model.getName(),
             model.getMaskedName(),
             model.getBirthDate(),
-            model.getEmail()
+            model.getEmail(),
+            model.getPointBalance()
         );
     }
 }

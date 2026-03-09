@@ -1,12 +1,15 @@
 package com.loopers.domain.user;
 
 import com.loopers.domain.BaseEntity;
+import com.loopers.domain.vo.Money;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import java.time.LocalDate;
 
@@ -29,6 +32,13 @@ public class UserModel extends BaseEntity {
     @Embedded
     private Email email;
 
+    @Embedded
+    @AttributeOverride(name = "value", column = @Column(name = "point_balance", nullable = false))
+    private Money pointBalance;
+
+    @Version
+    private Long version;
+
     protected UserModel() {
     }
 
@@ -40,6 +50,7 @@ public class UserModel extends BaseEntity {
         this.name = new UserName(name);
         this.birthDate = birthDate;
         this.email = new Email(email);
+        this.pointBalance = new Money(0);
     }
 
     public String getLoginId() {
@@ -64,6 +75,34 @@ public class UserModel extends BaseEntity {
 
     public String getMaskedName() {
         return name.masked();
+    }
+
+    public int getPointBalance() {
+        return pointBalance.getValue();
+    }
+
+    public void chargePoints(int amount) {
+        if (amount <= 0) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "충전 금액은 0보다 커야 합니다.");
+        }
+        this.pointBalance = new Money(this.pointBalance.getValue() + amount);
+    }
+
+    public void deductPoints(int amount) {
+        if (amount <= 0) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "차감 금액은 0보다 커야 합니다.");
+        }
+        if (this.pointBalance.getValue() < amount) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "포인트 잔액이 부족합니다.");
+        }
+        this.pointBalance = new Money(this.pointBalance.getValue() - amount);
+    }
+
+    public void refundPoints(int amount) {
+        if (amount <= 0) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "환불 금액은 0보다 커야 합니다.");
+        }
+        this.pointBalance = new Money(this.pointBalance.getValue() + amount);
     }
 
     public void changePassword(String newEncodedPassword) {

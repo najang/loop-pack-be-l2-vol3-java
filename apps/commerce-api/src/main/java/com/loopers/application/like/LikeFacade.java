@@ -2,7 +2,7 @@ package com.loopers.application.like;
 
 import com.loopers.application.product.ProductInfo;
 import com.loopers.domain.like.Like;
-import com.loopers.domain.like.LikeService;
+import com.loopers.application.like.LikeApplicationService;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 @Component
 public class LikeFacade {
 
-    private final LikeService likeService;
+    private final LikeApplicationService likeService;
     private final ProductService productService;
 
     public LikeInfo like(Long userId, Long productId) {

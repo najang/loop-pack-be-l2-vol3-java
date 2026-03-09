@@ -8,6 +8,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 
@@ -15,6 +16,9 @@ import lombok.Getter;
 @Entity
 @Table(name = "carts")
 public class Cart extends BaseEntity {
+
+    @Version
+    private Long version;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
