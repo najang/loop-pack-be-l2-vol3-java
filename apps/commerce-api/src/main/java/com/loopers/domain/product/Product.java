@@ -12,6 +12,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 
@@ -44,6 +45,10 @@ public class Product extends BaseEntity {
     @Embedded
     @Getter(AccessLevel.NONE)
     private LikeCount likeCount;
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 
     protected Product() {
     }

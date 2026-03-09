@@ -100,7 +100,7 @@ class LikeApplicationServiceTest {
     @Nested
     class Unlike {
 
-        @DisplayName("좋아요가 있으면, delete 후 product.decreaseLikes() + productRepository.save() 호출한다.")
+        @DisplayName("좋아요가 있으면, delete 후 product.decreaseLikes() + productRepository.save() 호출하고 product를 반환한다.")
         @Test
         void deletesLikeAndDecreasesLikeCount_whenLikeExists() {
             // arrange
@@ -111,15 +111,16 @@ class LikeApplicationServiceTest {
             when(productRepository.save(product)).thenReturn(product);
 
             // act
-            likeApplicationService.unlike(USER_ID, PRODUCT_ID);
+            Product result = likeApplicationService.unlike(USER_ID, PRODUCT_ID);
 
             // assert
             verify(likeRepository, times(1)).delete(like);
             verify(product, times(1)).decreaseLikes();
             verify(productRepository, times(1)).save(product);
+            assertThat(result).isEqualTo(product);
         }
 
-        @DisplayName("좋아요가 없으면, delete/decreaseLikes/productRepository.save를 호출하지 않는다 (멱등).")
+        @DisplayName("좋아요가 없으면, delete/decreaseLikes/productRepository.save를 호출하지 않고 product를 반환한다 (멱등).")
         @Test
         void doesNotDeleteOrDecrease_whenLikeDoesNotExist() {
             // arrange
@@ -128,12 +129,13 @@ class LikeApplicationServiceTest {
             when(likeRepository.findByUserIdAndProductId(USER_ID, PRODUCT_ID)).thenReturn(Optional.empty());
 
             // act
-            likeApplicationService.unlike(USER_ID, PRODUCT_ID);
+            Product result = likeApplicationService.unlike(USER_ID, PRODUCT_ID);
 
             // assert
             verify(likeRepository, never()).delete(any());
             verify(product, never()).decreaseLikes();
             verify(productRepository, never()).save(any());
+            assertThat(result).isEqualTo(product);
         }
 
         @DisplayName("상품이 존재하지 않으면, NOT_FOUND 예외가 발생한다.")

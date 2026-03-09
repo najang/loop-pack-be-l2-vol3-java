@@ -1,8 +1,8 @@
 package com.loopers.application.like;
 
 import com.loopers.application.product.ProductInfo;
-import com.loopers.domain.like.Like;
 import com.loopers.application.like.LikeApplicationService;
+import com.loopers.domain.like.Like;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -27,8 +27,9 @@ public class LikeFacade {
         return new LikeInfo(true, product.getLikeCount());
     }
 
-    public void unlike(Long userId, Long productId) {
-        likeService.unlike(userId, productId);
+    public LikeInfo unlike(Long userId, Long productId) {
+        Product product = likeService.unlike(userId, productId);
+        return new LikeInfo(false, product.getLikeCount());
     }
 
     public Page<ProductInfo> findLikedProducts(Long userId, Pageable pageable) {

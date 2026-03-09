@@ -22,7 +22,7 @@ public interface LikeV1ApiSpec {
         summary = "좋아요 취소",
         description = "상품의 좋아요를 취소합니다. 좋아요가 없는 경우에도 성공 응답을 반환합니다."
     )
-    void unlike(
+    ApiResponse<LikeV1Dto.LikeResponse> unlike(
         Long productId,
         @Parameter(hidden = true) UserModel user
     );
