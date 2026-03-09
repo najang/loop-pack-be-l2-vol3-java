@@ -40,7 +40,7 @@ public class LikeApplicationService {
     }
 
     @Transactional
-    public void unlike(Long userId, Long productId) {
+    public Product unlike(Long userId, Long productId) {
         Product product = productRepository.findByIdWithLock(productId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
 
@@ -50,6 +50,8 @@ public class LikeApplicationService {
                 product.decreaseLikes();
                 productRepository.save(product);
             });
+
+        return product;
     }
 
     @Transactional(readOnly = true)

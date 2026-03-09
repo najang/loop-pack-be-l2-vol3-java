@@ -197,9 +197,9 @@ class LikeV1ApiE2ETest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         }
 
-        @DisplayName("좋아요 후 취소하면 204 No Content를 반환하고 likeCount가 0이 된다.")
+        @DisplayName("좋아요 후 취소하면 200 OK를 반환하고 liked=false, likeCount=0이 된다.")
         @Test
-        void returns204AndLikeCountZero_whenUnliked() {
+        void returns200AndLikeCountZero_whenUnliked() {
             // arrange
             createUser(LOGIN_ID);
             Product product = createProduct("에어맥스");
@@ -211,42 +211,43 @@ class LikeV1ApiE2ETest {
             );
 
             // act
-            ResponseEntity<Void> response = testRestTemplate.exchange(
+            ResponseEntity<ApiResponse<LikeV1Dto.LikeResponse>> response = testRestTemplate.exchange(
                 "/api/v1/products/" + product.getId() + "/likes",
                 HttpMethod.DELETE,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
-                Void.class
+                new ParameterizedTypeReference<>() {}
             );
 
             // assert
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-
-            ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> productResponse = testRestTemplate.exchange(
-                "/api/v1/products/" + product.getId(),
-                HttpMethod.GET,
-                new HttpEntity<>(null),
-                new ParameterizedTypeReference<>() {}
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> assertThat(response.getBody()).isNotNull(),
+                () -> assertThat(response.getBody().data().liked()).isFalse(),
+                () -> assertThat(response.getBody().data().likeCount()).isEqualTo(0)
             );
-            assertThat(productResponse.getBody().data().likeCount()).isEqualTo(0);
         }
 
-        @DisplayName("좋아요 없는 상품에 취소 요청해도 204 No Content를 반환한다 (멱등).")
+        @DisplayName("좋아요 없는 상품에 취소 요청해도 200 OK를 반환하고 liked=false이다 (멱등).")
         @Test
-        void returns204_whenUnlikeCalledWithoutLike() {
+        void returns200_whenUnlikeCalledWithoutLike() {
             // arrange
             createUser(LOGIN_ID);
             Product product = createProduct("에어맥스");
 
             // act
-            ResponseEntity<Void> response = testRestTemplate.exchange(
+            ResponseEntity<ApiResponse<LikeV1Dto.LikeResponse>> response = testRestTemplate.exchange(
                 "/api/v1/products/" + product.getId() + "/likes",
                 HttpMethod.DELETE,
                 new HttpEntity<>(createAuthHeaders(LOGIN_ID)),
-                Void.class
+                new ParameterizedTypeReference<>() {}
             );
 
             // assert
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> assertThat(response.getBody()).isNotNull(),
+                () -> assertThat(response.getBody().data().liked()).isFalse()
+            );
         }
 
         @DisplayName("존재하지 않는 productId로 요청하면, 404 Not Found를 반환한다.")

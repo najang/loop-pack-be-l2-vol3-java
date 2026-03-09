@@ -9,13 +9,11 @@ import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
@@ -34,13 +32,12 @@ public class LikeV1Controller implements LikeV1ApiSpec {
     }
 
     @DeleteMapping("/api/v1/products/{productId}/likes")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @Override
-    public void unlike(
+    public ApiResponse<LikeV1Dto.LikeResponse> unlike(
         @PathVariable Long productId,
         @LoginUser UserModel user
     ) {
-        likeFacade.unlike(user.getId(), productId);
+        return ApiResponse.success(LikeV1Dto.LikeResponse.from(likeFacade.unlike(user.getId(), productId)));
     }
 
     @GetMapping("/api/v1/users/{userId}/likes")
