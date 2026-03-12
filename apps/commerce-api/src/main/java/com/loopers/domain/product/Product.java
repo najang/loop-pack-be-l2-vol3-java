@@ -11,6 +11,7 @@ import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
@@ -18,7 +19,14 @@ import lombok.Getter;
 
 @Getter
 @Entity
-@Table(name = "products")
+@Table(name = "products", indexes = {
+    @Index(name = "idx_like_count",       columnList = "like_count DESC"),
+    @Index(name = "idx_brand_like_count", columnList = "brand_id, like_count DESC"),
+    @Index(name = "idx_created_at",       columnList = "created_at DESC"),
+    @Index(name = "idx_brand_created_at", columnList = "brand_id, created_at DESC"),
+    @Index(name = "idx_price",            columnList = "price ASC"),
+    @Index(name = "idx_brand_price",      columnList = "brand_id, price ASC")
+})
 public class Product extends BaseEntity {
 
     @Column(name = "brand_id", nullable = false)
