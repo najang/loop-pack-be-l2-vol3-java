@@ -26,7 +26,7 @@ public class ProductV1Controller implements ProductV1ApiSpec {
         @RequestParam(required = false) Long brandId,
         @RequestParam(defaultValue = "latest") String sort,
         @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "10") int size
+        @RequestParam(defaultValue = "20") int size  // 캐시 키 설계 기준 사이즈 (기본값 20)
     ) {
         PageRequest pageable = PageRequest.of(page, size, toSort(sort));
         return ApiResponse.success(ProductV1Dto.ProductPageResponse.from(productFacade.findAll(brandId, pageable)));

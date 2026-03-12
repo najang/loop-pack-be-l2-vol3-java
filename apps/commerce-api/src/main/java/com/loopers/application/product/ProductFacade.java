@@ -1,22 +1,55 @@
 package com.loopers.application.product;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.loopers.config.redis.RedisConfig;
 import com.loopers.domain.brand.BrandService;
 import com.loopers.application.like.LikeApplicationService;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+
 @Component
 public class ProductFacade {
+
+    // 읽기 전용 조회 (Replica Preferred) - 캐시 히트 확인에 사용
+    private final RedisTemplate<String, String> redisTemplate;
+    // 쓰기 전용 (Master) - 캐시 저장 및 삭제에 사용
+    private final RedisTemplate<String, String> masterRedisTemplate;
 
     private final ProductService productService;
     private final BrandService brandService;
     private final LikeApplicationService likeService;
+    private final ObjectMapper objectMapper;
+
+    public ProductFacade(
+        ProductService productService,
+        BrandService brandService,
+        LikeApplicationService likeService,
+        RedisTemplate<String, String> redisTemplate,
+        @Qualifier(RedisConfig.REDIS_TEMPLATE_MASTER) RedisTemplate<String, String> masterRedisTemplate,
+        ObjectMapper objectMapper
+    ) {
+        this.productService = productService;
+        this.brandService = brandService;
+        this.likeService = likeService;
+        this.redisTemplate = redisTemplate;
+        this.masterRedisTemplate = masterRedisTemplate;
+        this.objectMapper = objectMapper;
+    }
 
     public ProductInfo findById(Long productId) {
         return findById(productId, null);
@@ -28,8 +61,37 @@ public class ProductFacade {
         return ProductInfo.from(product, isLiked);
     }
 
+    /**
+     * Cache-Aside 패턴으로 상품 목록을 조회한다.
+     * - page == 0: 캐시 우선 조회 → 미스 시 DB 조회 후 캐시 저장 (TTL 5분)
+     * - page > 0: 캐시 없이 DB 직접 조회 (페이지 수가 많아질수록 캐시 효용이 낮아 적용 제외)
+     */
     public Page<ProductInfo> findAll(Long brandId, Pageable pageable) {
-        return productService.findAll(brandId, pageable).map(ProductInfo::from);
+        // 첫 페이지가 아닌 경우 캐시 미적용
+        if (pageable.getPageNumber() != 0) {
+            return productService.findAll(brandId, pageable).map(ProductInfo::from);
+        }
+
+        String cacheKey = buildCacheKey(brandId, pageable);
+
+        // 캐시 히트: 직렬화된 JSON을 PageImpl로 복원해 반환
+        String cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            try {
+                ProductListCacheEntry entry = objectMapper.readValue(cached, ProductListCacheEntry.class);
+                return new PageImpl<>(entry.content(), pageable, entry.totalElements());
+            } catch (JsonProcessingException ignored) {
+            }
+        }
+
+        // 캐시 미스: DB 조회 후 결과를 캐시에 저장
+        Page<ProductInfo> result = productService.findAll(brandId, pageable).map(ProductInfo::from);
+        try {
+            ProductListCacheEntry entry = new ProductListCacheEntry(result.getContent(), result.getTotalElements());
+            masterRedisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(entry), Duration.ofMinutes(5));
+        } catch (JsonProcessingException ignored) {
+        }
+        return result;
     }
 
     public ProductInfo create(Long brandId, String name, String description, int price, int stock, SellingStatus sellingStatus) {
@@ -37,11 +99,80 @@ public class ProductFacade {
         return ProductInfo.from(productService.create(brandId, name, description, price, stock, sellingStatus));
     }
 
+    /**
+     * 상품 수정 후 해당 브랜드의 캐시를 무효화한다.
+     * update는 반환된 ProductInfo에서 brandId를 얻을 수 있으므로 별도 조회 불필요.
+     */
     public ProductInfo update(Long productId, String name, String description, int price, SellingStatus sellingStatus) {
-        return ProductInfo.from(productService.update(productId, name, description, price, sellingStatus));
+        ProductInfo info = ProductInfo.from(productService.update(productId, name, description, price, sellingStatus));
+        evictProductListCache(info.brandId());
+        return info;
     }
 
+    /**
+     * 상품 삭제 전 brandId를 먼저 확보한 뒤 삭제 후 캐시를 무효화한다.
+     * delete는 void 반환이므로 삭제 전에 별도로 조회해 brandId를 얻는다.
+     */
     public void delete(Long productId) {
+        Product product = productService.findById(productId);
+        Long brandId = product.getBrandId();
         productService.delete(productId);
+        evictProductListCache(brandId);
+    }
+
+    /**
+     * brandId와 관련된 캐시 키를 모두 삭제한다.
+     * - "product:list:all:*"       : brandId 필터 없는 전체 목록 캐시
+     * - "product:list:{brandId}:*" : 특정 브랜드 목록 캐시
+     */
+    private void evictProductListCache(Long brandId) {
+        deleteByPattern("product:list:all:*");
+        if (brandId != null) {
+            deleteByPattern("product:list:" + brandId + ":*");
+        }
+    }
+
+    /**
+     * SCAN 기반으로 패턴에 일치하는 키를 순회해 삭제한다.
+     * KEYS 명령은 싱글 스레드 Redis를 블로킹할 수 있어 운영 환경에서 사용 금지.
+     */
+    private void deleteByPattern(String pattern) {
+        masterRedisTemplate.execute((RedisCallback<Void>) connection -> {
+            ScanOptions options = ScanOptions.scanOptions().match(pattern).count(100).build();
+            List<byte[]> keys = new ArrayList<>();
+            try (var cursor = connection.keyCommands().scan(options)) {
+                cursor.forEachRemaining(keys::add);
+            } catch (Exception ignored) {
+            }
+            if (!keys.isEmpty()) {
+                connection.keyCommands().del(keys.toArray(new byte[0][]));
+            }
+            return null;
+        });
+    }
+
+    /**
+     * 캐시 키 형식: product:list:{brandId|all}:{sort}:0:{size}
+     * 예) product:list:all:latest:0:20
+     *     product:list:123:price_asc:0:20
+     */
+    private String buildCacheKey(Long brandId, Pageable pageable) {
+        String brandPart = brandId != null ? String.valueOf(brandId) : "all";
+        String sortPart = sortKey(pageable.getSort());
+        return "product:list:" + brandPart + ":" + sortPart + ":0:" + pageable.getPageSize();
+    }
+
+    /**
+     * Sort 객체를 캐시 키용 문자열로 변환한다.
+     * ProductV1Controller.toSort()의 역매핑.
+     */
+    private String sortKey(Sort sort) {
+        if (!sort.isSorted()) return "latest";
+        Sort.Order order = sort.iterator().next();
+        String prop = order.getProperty();
+        if (prop.equals("createdAt")) return "latest";
+        if (prop.equals("price.value")) return "price_asc";
+        if (prop.equals("likeCount.value")) return "likes_desc";
+        return prop + "_" + order.getDirection().name().toLowerCase();
     }
 }
