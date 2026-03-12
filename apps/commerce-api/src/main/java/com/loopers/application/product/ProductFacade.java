@@ -55,10 +55,35 @@ public class ProductFacade {
         return findById(productId, null);
     }
 
+    /**
+     * Cache-Aside 패턴으로 상품 상세를 조회한다.
+     * - 캐시 히트: isLiked는 사용자별 데이터이므로 캐시에 저장하지 않고 별도 조회 후 오버레이
+     * - 캐시 미스: DB 조회 후 isLiked=null 상태로 캐시 저장 (TTL 1분), 이후 isLiked 오버레이
+     * - 캐시 키: product:detail:{productId}
+     */
     public ProductInfo findById(Long productId, Long userId) {
+        String cacheKey = "product:detail:" + productId;
+
+        // 캐시 히트: isLiked를 별도 조회해 오버레이 후 반환
+        String cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            try {
+                ProductInfo info = objectMapper.readValue(cached, ProductInfo.class);
+                Boolean isLiked = userId != null ? likeService.isLiked(userId, productId) : null;
+                return info.withIsLiked(isLiked);
+            } catch (JsonProcessingException ignored) {
+            }
+        }
+
+        // 캐시 미스: DB 조회 후 isLiked=null 상태로 캐시 저장
         Product product = productService.findById(productId);
+        ProductInfo info = ProductInfo.from(product);
+        try {
+            masterRedisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(info), Duration.ofMinutes(1));
+        } catch (JsonProcessingException ignored) {
+        }
         Boolean isLiked = userId != null ? likeService.isLiked(userId, productId) : null;
-        return ProductInfo.from(product, isLiked);
+        return info.withIsLiked(isLiked);
     }
 
     /**
@@ -100,17 +125,22 @@ public class ProductFacade {
     }
 
     /**
-     * 상품 수정 후 해당 브랜드의 캐시를 무효화한다.
+     * 상품 수정 후 목록 캐시 및 상세 캐시를 무효화한다.
+     * - 목록 캐시: brandId 기반 SCAN 패턴 삭제
+     * - 상세 캐시: product:detail:{productId} exact key 삭제
      * update는 반환된 ProductInfo에서 brandId를 얻을 수 있으므로 별도 조회 불필요.
      */
     public ProductInfo update(Long productId, String name, String description, int price, SellingStatus sellingStatus) {
         ProductInfo info = ProductInfo.from(productService.update(productId, name, description, price, sellingStatus));
         evictProductListCache(info.brandId());
+        masterRedisTemplate.delete("product:detail:" + productId);
         return info;
     }
 
     /**
-     * 상품 삭제 전 brandId를 먼저 확보한 뒤 삭제 후 캐시를 무효화한다.
+     * 상품 삭제 후 목록 캐시 및 상세 캐시를 무효화한다.
+     * - 목록 캐시: brandId 기반 SCAN 패턴 삭제
+     * - 상세 캐시: product:detail:{productId} exact key 삭제
      * delete는 void 반환이므로 삭제 전에 별도로 조회해 brandId를 얻는다.
      */
     public void delete(Long productId) {
@@ -118,6 +148,7 @@ public class ProductFacade {
         Long brandId = product.getBrandId();
         productService.delete(productId);
         evictProductListCache(brandId);
+        masterRedisTemplate.delete("product:detail:" + productId);
     }
 
     /**

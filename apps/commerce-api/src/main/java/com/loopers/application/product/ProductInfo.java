@@ -41,4 +41,12 @@ public record ProductInfo(
             isLiked
         );
     }
+
+    /**
+     * isLiked만 교체한 새 인스턴스를 반환한다.
+     * Cache-Aside 조회 시 캐시에 저장된 상품 정보(isLiked=null)에 사용자별 좋아요 여부를 오버레이할 때 사용한다.
+     */
+    public ProductInfo withIsLiked(Boolean isLiked) {
+        return new ProductInfo(id, brandId, name, description, price, stock, sellingStatus, likeCount, isLiked);
+    }
 }
