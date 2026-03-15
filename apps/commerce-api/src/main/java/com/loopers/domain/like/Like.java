@@ -5,6 +5,7 @@ import com.loopers.support.error.ErrorType;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -14,7 +15,9 @@ import java.time.ZonedDateTime;
 
 @Getter
 @Entity
-@Table(name = "likes")
+@Table(name = "likes", indexes = {
+    @Index(name = "idx_user_created_at", columnList = "user_id, created_at DESC")
+})
 public class Like {
 
     @EmbeddedId

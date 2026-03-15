@@ -5,8 +5,10 @@ import com.loopers.domain.product.Product;
 import com.loopers.domain.product.SellingStatus;
 import com.loopers.infrastructure.brand.BrandJpaRepository;
 import com.loopers.infrastructure.product.ProductJpaRepository;
+import com.loopers.interfaces.api.product.ProductAdminV1Dto;
 import com.loopers.interfaces.api.product.ProductV1Dto;
 import com.loopers.utils.DatabaseCleanUp;
+import com.loopers.utils.RedisCleanUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,9 +17,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,6 +30,9 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ProductV1ApiE2ETest {
+
+    private static final String ADMIN_HEADER = "X-Loopers-Ldap";
+    private static final String ADMIN_VALUE = "loopers.admin";
 
     @Autowired
     private TestRestTemplate testRestTemplate;
@@ -38,9 +46,22 @@ class ProductV1ApiE2ETest {
     @Autowired
     private DatabaseCleanUp databaseCleanUp;
 
+    @Autowired
+    private RedisCleanUp redisCleanUp;
+
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+
     @AfterEach
     void tearDown() {
         databaseCleanUp.truncateAllTables();
+        redisCleanUp.truncateAll();
+    }
+
+    private HttpHeaders createAdminHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(ADMIN_HEADER, ADMIN_VALUE);
+        return headers;
     }
 
     private Brand createBrand(String name) {
@@ -185,6 +206,118 @@ class ProductV1ApiE2ETest {
         }
     }
 
+    @DisplayName("Cache-Aside")
+    @Nested
+    class ProductCacheE2E {
+
+        @DisplayName("첫 페이지 조회 결과가 Redis에 캐시된다.")
+        @Test
+        void 첫_페이지_조회_결과가_Redis에_캐시된다() {
+            // arrange
+            Brand brand = createBrand("Nike");
+            createProduct(brand.getId(), "에어맥스", 100000, 0);
+
+            // act
+            testRestTemplate.exchange(
+                "/api/v1/products?page=0&size=20&sort=latest",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<ApiResponse<ProductV1Dto.ProductPageResponse>>() {}
+            );
+
+            // assert
+            String cacheKey = "product:list:all:latest:0:20";
+            assertThat(redisTemplate.hasKey(cacheKey)).isTrue();
+        }
+
+        @DisplayName("캐시 적중 시 DB 변경 후에도 이전 결과를 반환한다.")
+        @Test
+        void 캐시_적중_시_DB_변경_후에도_이전_결과를_반환한다() {
+            // arrange
+            Brand brand = createBrand("Nike");
+            createProduct(brand.getId(), "에어맥스", 100000, 0);
+
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductPageResponse>> first = testRestTemplate.exchange(
+                "/api/v1/products?page=0&size=20&sort=latest",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+            int originalSize = first.getBody().data().content().size();
+
+            // DB에 새 상품 추가
+            createProduct(brand.getId(), "조던", 200000, 0);
+
+            // act: 두 번째 조회 (캐시 적중)
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductPageResponse>> second = testRestTemplate.exchange(
+                "/api/v1/products?page=0&size=20&sort=latest",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert: 캐시된 결과(이전 상품 수) 반환
+            assertThat(second.getBody().data().content()).hasSize(originalSize);
+        }
+
+        @DisplayName("2페이지 이상은 캐시하지 않는다.")
+        @Test
+        void 두번째_페이지_이상은_캐시하지_않는다() {
+            // arrange
+            Brand brand = createBrand("Nike");
+            createProduct(brand.getId(), "에어맥스", 100000, 0);
+
+            // act
+            testRestTemplate.exchange(
+                "/api/v1/products?page=1&size=20&sort=latest",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<ApiResponse<ProductV1Dto.ProductPageResponse>>() {}
+            );
+
+            // assert: page=1 은 캐시 키 없음
+            String cacheKey = "product:list:all:latest:1:20";
+            assertThat(redisTemplate.hasKey(cacheKey)).isFalse();
+            assertThat(redisTemplate.keys("product:list:*")).isEmpty();
+        }
+
+        @DisplayName("어드민 상품 삭제 시 캐시가 무효화된다.")
+        @Test
+        void 어드민_상품_삭제_시_캐시가_무효화된다() {
+            // arrange: 상품 생성 후 첫 페이지 조회로 캐시 적재
+            Brand brand = createBrand("Nike");
+            Product product = createProduct(brand.getId(), "에어맥스", 100000, 0);
+
+            testRestTemplate.exchange(
+                "/api/v1/products?page=0&size=20&sort=latest",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<ApiResponse<ProductV1Dto.ProductPageResponse>>() {}
+            );
+            assertThat(redisTemplate.keys("product:list:*")).isNotEmpty();
+
+            // act: 어드민 삭제
+            testRestTemplate.exchange(
+                "/api-admin/v1/products/" + product.getId(),
+                HttpMethod.DELETE,
+                new HttpEntity<>(createAdminHeaders()),
+                Void.class
+            );
+
+            // assert: 캐시 무효화 확인
+            assertThat(redisTemplate.keys("product:list:*")).isEmpty();
+
+            // 재조회 시 삭제된 상품 반영
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductPageResponse>> response = testRestTemplate.exchange(
+                "/api/v1/products?page=0&size=20&sort=latest",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+            assertThat(response.getBody().data().content()).isEmpty();
+        }
+    }
+
     @DisplayName("GET /api/v1/products/{productId}")
     @Nested
     class GetProduct {
@@ -227,6 +360,122 @@ class ProductV1ApiE2ETest {
 
             // assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        }
+
+        @DisplayName("상품 상세 조회 결과가 Redis에 캐시된다.")
+        @Test
+        void 상품_상세_조회_결과가_Redis에_캐시된다() {
+            // arrange
+            Brand brand = createBrand("Nike");
+            Product product = createProduct(brand.getId(), "에어맥스", 100000, 0);
+
+            // act
+            testRestTemplate.exchange(
+                "/api/v1/products/" + product.getId(),
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<ApiResponse<ProductV1Dto.ProductResponse>>() {}
+            );
+
+            // assert
+            String cacheKey = "product:detail:" + product.getId();
+            assertThat(redisTemplate.hasKey(cacheKey)).isTrue();
+        }
+
+        @DisplayName("캐시 적중 시 DB 변경 후에도 이전 결과를 반환한다.")
+        @Test
+        void 캐시_적중_시_DB_변경_후에도_이전_결과를_반환한다() {
+            // arrange
+            Brand brand = createBrand("Nike");
+            Product product = createProduct(brand.getId(), "에어맥스", 100000, 0);
+
+            testRestTemplate.exchange(
+                "/api/v1/products/" + product.getId(),
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<ApiResponse<ProductV1Dto.ProductResponse>>() {}
+            );
+
+            // DB 직접 수정 (캐시 우회)
+            Product saved = productJpaRepository.findById(product.getId()).orElseThrow();
+            saved.changeProductInfo("조던", null, 200000, SellingStatus.SELLING);
+            productJpaRepository.save(saved);
+
+            // act: 두 번째 조회 (캐시 적중)
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> response = testRestTemplate.exchange(
+                "/api/v1/products/" + product.getId(),
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert: 캐시된 이전 이름이 반환됨
+            assertThat(response.getBody().data().name()).isEqualTo("에어맥스");
+        }
+
+        @DisplayName("어드민 상품 수정 시 상세 캐시가 무효화된다.")
+        @Test
+        void 어드민_상품_수정_시_상세_캐시가_무효화된다() {
+            // arrange: 조회로 캐시 적재
+            Brand brand = createBrand("Nike");
+            Product product = createProduct(brand.getId(), "에어맥스", 100000, 0);
+
+            testRestTemplate.exchange(
+                "/api/v1/products/" + product.getId(),
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<ApiResponse<ProductV1Dto.ProductResponse>>() {}
+            );
+            assertThat(redisTemplate.hasKey("product:detail:" + product.getId())).isTrue();
+
+            // act: 어드민 상품 수정
+            ProductAdminV1Dto.UpdateRequest updateRequest = new ProductAdminV1Dto.UpdateRequest(
+                "조던", null, 200000, SellingStatus.SELLING
+            );
+            HttpHeaders headers = createAdminHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            testRestTemplate.exchange(
+                "/api-admin/v1/products/" + product.getId(),
+                HttpMethod.PATCH,
+                new HttpEntity<>(updateRequest, headers),
+                Void.class
+            );
+
+            // assert: 캐시 무효화 후 재조회 시 변경된 데이터 반영
+            ResponseEntity<ApiResponse<ProductV1Dto.ProductResponse>> response = testRestTemplate.exchange(
+                "/api/v1/products/" + product.getId(),
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+            assertThat(response.getBody().data().name()).isEqualTo("조던");
+        }
+
+        @DisplayName("어드민 상품 삭제 시 상세 캐시가 무효화된다.")
+        @Test
+        void 어드민_상품_삭제_시_상세_캐시가_무효화된다() {
+            // arrange: 조회로 캐시 적재
+            Brand brand = createBrand("Nike");
+            Product product = createProduct(brand.getId(), "에어맥스", 100000, 0);
+
+            testRestTemplate.exchange(
+                "/api/v1/products/" + product.getId(),
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<ApiResponse<ProductV1Dto.ProductResponse>>() {}
+            );
+            assertThat(redisTemplate.hasKey("product:detail:" + product.getId())).isTrue();
+
+            // act: 어드민 상품 삭제
+            testRestTemplate.exchange(
+                "/api-admin/v1/products/" + product.getId(),
+                HttpMethod.DELETE,
+                new HttpEntity<>(createAdminHeaders()),
+                Void.class
+            );
+
+            // assert: 상세 캐시 키 삭제 확인
+            assertThat(redisTemplate.hasKey("product:detail:" + product.getId())).isFalse();
         }
     }
 }
