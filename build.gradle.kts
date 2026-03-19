@@ -68,6 +68,9 @@ subprojects {
         testImplementation("org.springframework.boot:spring-boot-testcontainers")
         testImplementation("org.testcontainers:testcontainers")
         testImplementation("org.testcontainers:junit-jupiter")
+        // Resilience4j
+        implementation("io.github.resilience4j:resilience4j-spring-boot3")
+        implementation("org.springframework.boot:spring-boot-starter-aop")
     }
 
     tasks.withType(Jar::class) { enabled = true }
