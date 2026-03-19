@@ -15,6 +15,13 @@ spring:
     web-application-type: servlet
   application:
     name: commerce-api
+  cloud:
+    openfeign:
+      client:
+        config:
+          pg-simulator:
+            connectTimeout: 1000
+            readTimeout: 3000
   profiles:
     active: local
   config:
@@ -28,6 +35,36 @@ springdoc:
   use-fqn: true
   swagger-ui:
     path: /swagger-ui.html
+
+pg:
+  simulator:
+    url: http://localhost:8090
+    callback-base-url: http://localhost:8080/api/v1/payments
+    secret: loopers-pg-secret-2026
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      pgCircuitBreaker:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+  retry:
+    instances:
+      pgRetry:
+        max-attempts: 3
+        wait-duration: 1s
+        retry-exceptions:
+          - feign.RetryableException
+        fail-after-max-attempts: true
+  bulkhead:
+    instances:
+      pgBulkhead:
+        max-concurrent-calls: 20
+        max-wait-duration: 0
 
 ---
 spring:
