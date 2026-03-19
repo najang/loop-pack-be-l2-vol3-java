@@ -13,7 +13,6 @@ import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
 import com.loopers.domain.user.UserModel;
-import com.loopers.domain.user.UserService;
 import com.loopers.infrastructure.user.UserJpaRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
@@ -40,7 +39,6 @@ class OrderApplicationServiceIntegrationTest {
     private static final String PRODUCT_NAME = "에어맥스";
     private static final int PRICE = 10000;
     private static final int STOCK = 10;
-    private static final int LARGE_POINT_BALANCE = 1_000_000;
 
     private Long brandId;
     private Long userId;
@@ -62,9 +60,6 @@ class OrderApplicationServiceIntegrationTest {
     private CouponService couponService;
 
     @Autowired
-    private UserService userService;
-
-    @Autowired
     private UserJpaRepository userJpaRepository;
 
     @Autowired
@@ -79,13 +74,11 @@ class OrderApplicationServiceIntegrationTest {
             "user1", "encoded", "홍길동", LocalDate.of(1990, 1, 1), "user1@test.com"
         ));
         userId = user.getId();
-        userService.chargePoints(userId, LARGE_POINT_BALANCE);
 
         UserModel otherUser = userJpaRepository.save(new UserModel(
             "user2", "encoded", "김철수", LocalDate.of(1991, 2, 2), "user2@test.com"
         ));
         otherUserId = otherUser.getId();
-        userService.chargePoints(otherUserId, LARGE_POINT_BALANCE);
     }
 
     @AfterEach
@@ -97,7 +90,7 @@ class OrderApplicationServiceIntegrationTest {
     @Nested
     class Create {
 
-        @DisplayName("쿠폰 없이 정상 주문이면, status=ORDERED, originalTotalPrice 계산, 재고 차감이 확인된다.")
+        @DisplayName("쿠폰 없이 정상 주문이면, status=PAYMENT_PENDING, originalTotalPrice 계산, 재고 차감이 확인된다.")
         @Test
         void createsOrder_withCorrectStatusAndTotalPrice() {
             // arrange
@@ -109,7 +102,7 @@ class OrderApplicationServiceIntegrationTest {
             // assert
             assertAll(
                 () -> assertThat(order.getUserId()).isEqualTo(userId),
-                () -> assertThat(order.getStatus()).isEqualTo(OrderStatus.ORDERED),
+                () -> assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING),
                 () -> assertThat(order.getOriginalTotalPrice()).isEqualTo(PRICE * 3),
                 () -> assertThat(order.getDiscountAmount()).isEqualTo(0),
                 () -> assertThat(order.getFinalTotalPrice()).isEqualTo(PRICE * 3),
@@ -279,6 +272,8 @@ class OrderApplicationServiceIntegrationTest {
             // arrange
             Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
             Order order = orderApplicationService.create(userId, product.getId(), 3, null);
+            order.confirmPayment();
+            orderRepository.save(order);
 
             // act
             orderApplicationService.cancel(order.getId());
