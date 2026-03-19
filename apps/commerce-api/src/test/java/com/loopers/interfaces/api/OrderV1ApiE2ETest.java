@@ -15,7 +15,6 @@ import com.loopers.infrastructure.coupon.CouponTemplateJpaRepository;
 import com.loopers.infrastructure.coupon.UserCouponJpaRepository;
 import com.loopers.infrastructure.order.OrderJpaRepository;
 import com.loopers.infrastructure.payment.PaymentJpaRepository;
-import com.loopers.infrastructure.pg.CallbackSignatureValidator;
 import com.loopers.infrastructure.pg.PgGateway;
 import com.loopers.infrastructure.pg.PgPaymentResponse;
 import com.loopers.infrastructure.product.ProductJpaRepository;
@@ -88,9 +87,6 @@ class OrderV1ApiE2ETest {
     @Autowired
     private DatabaseCleanUp databaseCleanUp;
 
-    @Autowired
-    private CallbackSignatureValidator callbackSignatureValidator;
-
     @MockBean
     private PgGateway pgGateway;
 
@@ -143,7 +139,7 @@ class OrderV1ApiE2ETest {
     }
 
     private void mockPgGatewaySuccess() {
-        when(pgGateway.requestPayment(any()))
+        when(pgGateway.requestPayment(any(), any()))
             .thenReturn(new PgPaymentResponse("TX-001"));
     }
 
@@ -340,17 +336,11 @@ class OrderV1ApiE2ETest {
             Long paymentId = paymentJpaRepository.findByOrderId(orderId).orElseThrow().getId();
 
             // act
-            String status = "COMPLETED";
-            String signature = callbackSignatureValidator.sign(paymentId + "" + orderId + status);
-
-            HttpHeaders callbackHeaders = new HttpHeaders();
-            callbackHeaders.set("X-PG-Signature", signature);
-
-            PaymentV1Dto.CallbackRequest callbackRequest = new PaymentV1Dto.CallbackRequest(orderId, status, null);
+            PaymentV1Dto.CallbackRequest callbackRequest = new PaymentV1Dto.CallbackRequest("TX-001", "SUCCESS", null);
             testRestTemplate.exchange(
                 "/api/v1/payments/" + paymentId + "/callback",
                 HttpMethod.POST,
-                new HttpEntity<>(callbackRequest, callbackHeaders),
+                new HttpEntity<>(callbackRequest),
                 Void.class
             );
 
@@ -372,17 +362,11 @@ class OrderV1ApiE2ETest {
             Long paymentId = paymentJpaRepository.findByOrderId(orderId).orElseThrow().getId();
 
             // act
-            String status = "FAILED";
-            String signature = callbackSignatureValidator.sign(paymentId + "" + orderId + status);
-
-            HttpHeaders callbackHeaders = new HttpHeaders();
-            callbackHeaders.set("X-PG-Signature", signature);
-
-            PaymentV1Dto.CallbackRequest callbackRequest = new PaymentV1Dto.CallbackRequest(orderId, status, "카드 한도 초과");
+            PaymentV1Dto.CallbackRequest callbackRequest = new PaymentV1Dto.CallbackRequest("TX-001", "FAILED", "카드 한도 초과");
             testRestTemplate.exchange(
                 "/api/v1/payments/" + paymentId + "/callback",
                 HttpMethod.POST,
-                new HttpEntity<>(callbackRequest, callbackHeaders),
+                new HttpEntity<>(callbackRequest),
                 Void.class
             );
 

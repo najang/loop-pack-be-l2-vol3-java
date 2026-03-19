@@ -33,19 +33,19 @@ public class PaymentFacade {
             return new OrderAndPayment(order, payment);
         }));
 
-        paymentApplicationService.requestToPg(pair.payment());
+        paymentApplicationService.requestToPg(pair.payment(), userId);
 
         return OrderInfo.from(pair.order());
     }
 
     @Transactional
     public void handleCallback(PgCallbackRequest callback) {
-        paymentApplicationService.handleCallback(callback);
+        Payment payment = paymentApplicationService.handleCallback(callback);
 
-        if ("COMPLETED".equals(callback.status())) {
-            orderApplicationService.confirmPayment(callback.orderId());
+        if ("SUCCESS".equals(callback.status())) {
+            orderApplicationService.confirmPayment(payment.getOrderId());
         } else {
-            orderApplicationService.failPayment(callback.orderId());
+            orderApplicationService.failPayment(payment.getOrderId());
         }
     }
 

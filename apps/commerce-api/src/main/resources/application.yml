@@ -38,9 +38,8 @@ springdoc:
 
 pg:
   simulator:
-    url: http://localhost:8090
+    url: http://localhost:8082
     callback-base-url: http://localhost:8080/api/v1/payments
-    secret: loopers-pg-secret-2026
 
 resilience4j:
   circuitbreaker:

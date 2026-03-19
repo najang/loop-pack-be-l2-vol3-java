@@ -2,10 +2,10 @@
 ### 결제 요청
 POST {{pg-simulator}}/api/v1/payments
 Content-Type: application/json
+X-USER-ID: 1
 
 {
-  "paymentId": 1,
-  "orderId": 1351039135,
+  "orderId": "1351039135",
   "cardType": "SAMSUNG",
   "cardNo": "1234-5678-9814-1451",
   "amount": 5000,

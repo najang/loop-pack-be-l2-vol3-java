@@ -29,11 +29,11 @@ class PgGatewayTest {
         @Test
         void returnsStatusResponse_whenClientSucceeds() {
             // arrange
-            PgPaymentStatusResponse expected = new PgPaymentStatusResponse(1L, "TX-001", "COMPLETED", null);
-            when(client.inquirePayment(1L)).thenReturn(expected);
+            PgPaymentStatusResponse expected = new PgPaymentStatusResponse("TX-001", "SUCCESS", null);
+            when(client.inquirePayment("TX-001")).thenReturn(expected);
 
             // act
-            PgPaymentStatusResponse result = pgGateway.inquirePayment(1L);
+            PgPaymentStatusResponse result = pgGateway.inquirePayment("TX-001");
 
             // assert
             assertThat(result).isEqualTo(expected);
@@ -43,12 +43,12 @@ class PgGatewayTest {
         @Test
         void throwsPaymentFailed_whenClientThrows() {
             // arrange
-            when(client.inquirePayment(1L)).thenThrow(new RuntimeException("timeout"));
+            when(client.inquirePayment("TX-001")).thenThrow(new RuntimeException("timeout"));
 
             // act & assert
             // 단위 테스트에서는 Spring AOP가 동작하지 않으므로 예외가 직접 전파됨
             // 실제 Circuit Breaker fallback 동작은 E2E 테스트에서 검증
-            assertThrows(RuntimeException.class, () -> pgGateway.inquirePayment(1L));
+            assertThrows(RuntimeException.class, () -> pgGateway.inquirePayment("TX-001"));
         }
     }
 }

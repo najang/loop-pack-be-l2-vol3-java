@@ -2,7 +2,7 @@ package com.loopers.infrastructure.pg;
 
 public record PgCallbackRequest(
     Long paymentId,
-    Long orderId,
+    String transactionKey,
     String status,
     String failureReason
 ) {

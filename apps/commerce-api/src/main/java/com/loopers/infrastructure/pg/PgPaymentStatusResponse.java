@@ -1,9 +1,8 @@
 package com.loopers.infrastructure.pg;
 
 public record PgPaymentStatusResponse(
-    Long paymentId,
-    String pgTransactionId,
+    String transactionKey,
     String status,
-    String failureReason
+    String reason
 ) {
 }
