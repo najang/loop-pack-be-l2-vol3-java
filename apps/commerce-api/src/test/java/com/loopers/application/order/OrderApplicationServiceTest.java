@@ -8,7 +8,6 @@ import com.loopers.domain.order.OrderItem;
 import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
-import com.loopers.domain.user.UserService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import org.junit.jupiter.api.DisplayName;
@@ -25,9 +24,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -52,9 +48,6 @@ class OrderApplicationServiceTest {
 
     @Mock
     private CouponService couponService;
-
-    @Mock
-    private UserService userService;
 
     @InjectMocks
     private OrderApplicationService orderApplicationService;
@@ -91,7 +84,7 @@ class OrderApplicationServiceTest {
             assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         }
 
-        @DisplayName("정상 주문이면, product.deductStock + productRepository.save + orderRepository.save + userService.deductPoints가 호출된다.")
+        @DisplayName("정상 주문이면, product.deductStock + productRepository.save + orderRepository.save가 호출된다.")
         @Test
         void deductsStockAndSavesOrder_whenOrderIsValid() {
             // arrange
@@ -114,30 +107,6 @@ class OrderApplicationServiceTest {
             verify(product, times(1)).deductStock(2);
             verify(productRepository, times(1)).save(product);
             verify(orderRepository, times(1)).save(any(Order.class));
-            verify(userService, times(1)).deductPoints(eq(USER_ID), anyInt());
-        }
-
-        @DisplayName("포인트 잔액이 부족하면, BAD_REQUEST 예외가 발생하고 주문이 저장되지 않는다.")
-        @Test
-        void throwsBadRequest_whenInsufficientPoints() {
-            // arrange
-            Product product = mock(Product.class);
-            Brand brand = mock(Brand.class);
-            when(productRepository.findByIdWithLock(PRODUCT_ID)).thenReturn(Optional.of(product));
-            when(product.canOrder()).thenReturn(true);
-            when(product.getBrandId()).thenReturn(1L);
-            when(product.getPrice()).thenReturn(1000);
-            when(brandRepository.findById(1L)).thenReturn(Optional.of(brand));
-            when(productRepository.save(product)).thenReturn(product);
-            doThrow(new CoreException(ErrorType.BAD_REQUEST, "포인트 잔액이 부족합니다."))
-                .when(userService).deductPoints(eq(USER_ID), anyInt());
-
-            // act
-            CoreException ex = assertThrows(CoreException.class, () -> orderApplicationService.create(USER_ID, PRODUCT_ID, 2, null));
-
-            // assert
-            assertThat(ex.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
-            verify(orderRepository, never()).save(any());
         }
     }
 
@@ -211,7 +180,7 @@ class OrderApplicationServiceTest {
             verify(orderRepository, never()).save(any());
         }
 
-        @DisplayName("정상 취소이면, order.cancel() + product.restoreStock + productRepository.save + orderRepository.save + userService.refundPoints가 호출된다.")
+        @DisplayName("정상 취소이면, order.cancel() + product.restoreStock + productRepository.save + orderRepository.save가 호출된다.")
         @Test
         void restoresStockAndCancelsOrder_whenCancelIsValid() {
             // arrange
@@ -221,8 +190,6 @@ class OrderApplicationServiceTest {
 
             Order order = mock(Order.class);
             when(order.getItems()).thenReturn(List.of(item));
-            when(order.getUserId()).thenReturn(USER_ID);
-            when(order.getFinalTotalPrice()).thenReturn(2000);
             when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
             Product product = mock(Product.class);
@@ -238,7 +205,6 @@ class OrderApplicationServiceTest {
             verify(productRepository, times(1)).save(product);
             verify(order, times(1)).cancel();
             verify(orderRepository, times(1)).save(order);
-            verify(userService, times(1)).refundPoints(USER_ID, 2000);
         }
     }
 }
