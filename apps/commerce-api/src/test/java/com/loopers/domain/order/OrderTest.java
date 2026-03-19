@@ -22,9 +22,9 @@ class OrderTest {
     @Nested
     class Create {
 
-        @DisplayName("userId와 items가 정상 제공되면, 정상적으로 생성된다.")
+        @DisplayName("userId와 items가 정상 제공되면, PAYMENT_PENDING 상태로 생성된다.")
         @Test
-        void createsOrder_whenRequiredFieldsAreProvided() {
+        void createsOrder_withPaymentPendingStatus() {
             // arrange
             List<OrderItem> items = List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 2, 1000));
 
@@ -34,7 +34,7 @@ class OrderTest {
             // assert
             assertAll(
                 () -> assertThat(order.getUserId()).isEqualTo(USER_ID),
-                () -> assertThat(order.getStatus()).isEqualTo(OrderStatus.ORDERED),
+                () -> assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING),
                 () -> assertThat(order.getItems()).hasSize(1)
             );
         }
@@ -111,6 +111,68 @@ class OrderTest {
         }
     }
 
+    @DisplayName("결제 완료 처리 시,")
+    @Nested
+    class ConfirmPayment {
+
+        @DisplayName("PAYMENT_PENDING 상태에서 confirmPayment()를 호출하면, ORDERED로 전이된다.")
+        @Test
+        void transitionsToOrdered_whenPaymentPending() {
+            // arrange
+            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
+
+            // act
+            order.confirmPayment();
+
+            // assert
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.ORDERED);
+        }
+
+        @DisplayName("PAYMENT_PENDING이 아닌 상태에서 confirmPayment()를 호출하면, BAD_REQUEST 예외가 발생한다.")
+        @Test
+        void throwsBadRequest_whenNotPaymentPending() {
+            // arrange
+            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
+            order.confirmPayment();
+
+            // act & assert
+            assertThatThrownBy(order::confirmPayment)
+                .isInstanceOf(CoreException.class)
+                .satisfies(e -> assertThat(((CoreException) e).getErrorType()).isEqualTo(ErrorType.BAD_REQUEST));
+        }
+    }
+
+    @DisplayName("결제 실패 처리 시,")
+    @Nested
+    class FailPayment {
+
+        @DisplayName("PAYMENT_PENDING 상태에서 failPayment()를 호출하면, PAYMENT_FAILED로 전이된다.")
+        @Test
+        void transitionsToPaymentFailed_whenPaymentPending() {
+            // arrange
+            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
+
+            // act
+            order.failPayment();
+
+            // assert
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_FAILED);
+        }
+
+        @DisplayName("PAYMENT_PENDING이 아닌 상태에서 failPayment()를 호출하면, BAD_REQUEST 예외가 발생한다.")
+        @Test
+        void throwsBadRequest_whenNotPaymentPending() {
+            // arrange
+            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
+            order.failPayment();
+
+            // act & assert
+            assertThatThrownBy(order::failPayment)
+                .isInstanceOf(CoreException.class)
+                .satisfies(e -> assertThat(((CoreException) e).getErrorType()).isEqualTo(ErrorType.BAD_REQUEST));
+        }
+    }
+
     @DisplayName("주문을 취소할 때,")
     @Nested
     class Cancel {
@@ -120,6 +182,7 @@ class OrderTest {
         void cancelsOrder_whenStatusIsOrdered() {
             // arrange
             Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
+            order.confirmPayment();
 
             // act
             order.cancel();
@@ -142,6 +205,18 @@ class OrderTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         }
 
+        @DisplayName("PAYMENT_PENDING 상태에서 취소하면, BAD_REQUEST 예외가 발생한다.")
+        @Test
+        void throwsBadRequest_whenStatusIsPaymentPending() {
+            // arrange
+            Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
+
+            // act & assert
+            assertThatThrownBy(order::cancel)
+                .isInstanceOf(CoreException.class)
+                .satisfies(e -> assertThat(((CoreException) e).getErrorType()).isEqualTo(ErrorType.BAD_REQUEST));
+        }
+
         @DisplayName("DELIVERED 상태에서 취소하면, BAD_REQUEST 예외가 발생한다.")
         @Test
         void throwsBadRequest_whenStatusIsDelivered() {
@@ -160,6 +235,7 @@ class OrderTest {
         void throwsBadRequest_whenStatusIsAlreadyCancelled() {
             // arrange
             Order order = new Order(USER_ID, List.of(new OrderItem(PRODUCT_ID, "상품명", "브랜드명", 1, 1000)));
+            order.confirmPayment();
             order.cancel();
 
             // act & assert
