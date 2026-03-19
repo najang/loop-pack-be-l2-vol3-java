@@ -1,0 +1,10 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: pg-simulator
+
+pg:
+  simulator:
+    secret: loopers-pg-secret-2026
