@@ -2,7 +2,6 @@ package com.loopers.interfaces.api.user;
 
 import com.loopers.application.user.UserInfo;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -51,31 +50,15 @@ public class UserV1Dto {
         String loginId,
         String name,
         LocalDate birthDate,
-        String email,
-        int pointBalance
+        String email
     ) {
         public static UserInfoResponse from(UserInfo info) {
             return new UserInfoResponse(
                 info.loginId(),
                 info.maskedName(),
                 info.birthDate(),
-                info.email(),
-                info.pointBalance()
+                info.email()
             );
-        }
-    }
-
-    public record ChargePointRequest(
-        @Min(value = 1, message = "충전 금액은 1 이상이어야 합니다.")
-        int amount
-    ) {
-    }
-
-    public record ChargePointResponse(
-        int pointBalance
-    ) {
-        public static ChargePointResponse from(UserInfo info) {
-            return new ChargePointResponse(info.pointBalance());
         }
     }
 

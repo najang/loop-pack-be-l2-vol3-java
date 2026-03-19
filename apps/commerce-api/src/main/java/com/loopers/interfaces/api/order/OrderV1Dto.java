@@ -3,6 +3,7 @@ package com.loopers.interfaces.api.order;
 import com.loopers.application.order.OrderInfo;
 import com.loopers.application.order.OrderItemInfo;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.util.List;
@@ -12,7 +13,9 @@ public class OrderV1Dto {
     public record CreateRequest(
         @NotNull Long productId,
         @Min(1) int quantity,
-        Long couponId
+        Long couponId,
+        @NotBlank String cardType,
+        @NotBlank String cardNo
     ) {}
 
     public record OrderItemResponse(Long productId, String productName, String brandName, int quantity, int unitPrice, int subtotal) {
