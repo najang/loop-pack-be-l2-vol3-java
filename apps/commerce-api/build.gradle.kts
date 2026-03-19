@@ -11,6 +11,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${project.properties["springDocOpenApiVersion"]}")
 
+    // openfeign
+    implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
+
     // security (password encoding)
     implementation("org.springframework.security:spring-security-crypto")
 
