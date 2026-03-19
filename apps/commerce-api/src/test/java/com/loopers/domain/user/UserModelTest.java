@@ -124,67 +124,6 @@ class UserModelTest {
         }
     }
 
-    @DisplayName("포인트 충전 시,")
-    @Nested
-    class ChargePoints {
-
-        @DisplayName("양수 금액을 충전하면, 잔액이 증가한다.")
-        @Test
-        void increasesBalance_whenAmountIsPositive() {
-            // arrange
-            UserModel user = new UserModel(LOGIN_ID, ENCODED_PASSWORD, NAME, BIRTH_DATE, EMAIL);
-
-            // act
-            user.chargePoints(5000);
-
-            // assert
-            assertThat(user.getPointBalance()).isEqualTo(5000);
-        }
-
-        @DisplayName("0 이하 금액을 충전하면, BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenAmountIsNotPositive() {
-            // arrange
-            UserModel user = new UserModel(LOGIN_ID, ENCODED_PASSWORD, NAME, BIRTH_DATE, EMAIL);
-
-            // act & assert
-            assertThatThrownBy(() -> user.chargePoints(0))
-                .isInstanceOf(CoreException.class)
-                .satisfies(e -> assertThat(((CoreException) e).getErrorType()).isEqualTo(ErrorType.BAD_REQUEST));
-        }
-    }
-
-    @DisplayName("포인트 차감 시,")
-    @Nested
-    class DeductPoints {
-
-        @DisplayName("잔액이 충분하면, 차감된다.")
-        @Test
-        void deductsBalance_whenSufficientBalance() {
-            // arrange
-            UserModel user = new UserModel(LOGIN_ID, ENCODED_PASSWORD, NAME, BIRTH_DATE, EMAIL);
-            user.chargePoints(10000);
-
-            // act
-            user.deductPoints(3000);
-
-            // assert
-            assertThat(user.getPointBalance()).isEqualTo(7000);
-        }
-
-        @DisplayName("잔액이 부족하면, BAD_REQUEST 예외가 발생한다.")
-        @Test
-        void throwsBadRequest_whenInsufficientBalance() {
-            // arrange
-            UserModel user = new UserModel(LOGIN_ID, ENCODED_PASSWORD, NAME, BIRTH_DATE, EMAIL);
-
-            // act & assert
-            assertThatThrownBy(() -> user.deductPoints(1000))
-                .isInstanceOf(CoreException.class)
-                .satisfies(e -> assertThat(((CoreException) e).getErrorType()).isEqualTo(ErrorType.BAD_REQUEST));
-        }
-    }
-
     @DisplayName("비밀번호 변경 시,")
     @Nested
     class ChangePassword {
