@@ -3,12 +3,12 @@ package com.loopers.application.order;
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandRepository;
 import com.loopers.domain.coupon.CouponService;
+import com.loopers.domain.coupon.UserCoupon;
 import com.loopers.domain.order.Order;
 import com.loopers.domain.order.OrderItem;
 import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
-import com.loopers.domain.user.UserService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,6 @@ public class OrderApplicationService {
     private final ProductRepository productRepository;
     private final BrandRepository brandRepository;
     private final CouponService couponService;
-    private final UserService userService;
 
     @Transactional
     public Order create(Long userId, Long productId, int quantity, Long userCouponId) {
@@ -50,9 +49,6 @@ public class OrderApplicationService {
         if (userCouponId != null) {
             discountAmount = couponService.validateAndUse(userId, userCouponId, originalAmount);
         }
-
-        int finalAmount = originalAmount - discountAmount;
-        userService.deductPoints(userId, finalAmount);
 
         OrderItem item = new OrderItem(productId, product.getName(), brand.getName(), quantity, product.getPrice());
         Order order = new Order(userId, List.of(item), userCouponId, discountAmount);
@@ -86,6 +82,40 @@ public class OrderApplicationService {
     }
 
     @Transactional
+    public void confirmPayment(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
+        order.confirmPayment();
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    public void failPayment(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
+
+        List<OrderItem> sortedItems = order.getItems().stream()
+            .sorted(Comparator.comparing(OrderItem::getProductId))
+            .toList();
+
+        for (OrderItem item : sortedItems) {
+            Product product = productRepository.findByIdWithLock(item.getProductId())
+                .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
+            product.restoreStock(item.getQuantity());
+            productRepository.save(product);
+        }
+
+        if (order.getUserCouponId() != null) {
+            UserCoupon userCoupon = couponService.findUserCouponById(order.getUserCouponId());
+            userCoupon.restore();
+            couponService.saveUserCoupon(userCoupon);
+        }
+
+        order.failPayment();
+        orderRepository.save(order);
+    }
+
+    @Transactional
     public void cancel(Long orderId) {
         Order order = orderRepository.findById(orderId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
@@ -103,7 +133,5 @@ public class OrderApplicationService {
 
         order.cancel();
         orderRepository.save(order);
-
-        userService.refundPoints(order.getUserId(), order.getFinalTotalPrice());
     }
 }

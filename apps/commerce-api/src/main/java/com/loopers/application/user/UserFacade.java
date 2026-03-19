@@ -17,11 +17,6 @@ public class UserFacade {
         return UserInfo.from(user);
     }
 
-    public UserInfo chargePoints(Long userId, int amount) {
-        UserModel user = userService.chargePoints(userId, amount);
-        return UserInfo.from(user);
-    }
-
     public void changePassword(UserModel user, String currentPassword, String newPassword) {
         userService.changePassword(user, currentPassword, newPassword);
     }
