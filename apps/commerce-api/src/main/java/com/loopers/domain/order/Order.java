@@ -73,7 +73,7 @@ public class Order extends BaseEntity {
         }
         int original = items.stream().mapToInt(i -> i.getUnitPrice() * i.getQuantity()).sum();
         this.userId = userId;
-        this.status = OrderStatus.ORDERED;
+        this.status = OrderStatus.PAYMENT_PENDING;
         this.items = new ArrayList<>(items);
         this.originalTotalPrice = new Money(original);
         this.discountAmount = new Money(discountAmount);
@@ -97,9 +97,26 @@ public class Order extends BaseEntity {
         this.status = status;
     }
 
+    public void confirmPayment() {
+        if (this.status != OrderStatus.PAYMENT_PENDING) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "결제 대기 상태의 주문만 결제 완료 처리할 수 있습니다.");
+        }
+        this.status = OrderStatus.ORDERED;
+    }
+
+    public void failPayment() {
+        if (this.status != OrderStatus.PAYMENT_PENDING) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "결제 대기 상태의 주문만 결제 실패 처리할 수 있습니다.");
+        }
+        this.status = OrderStatus.PAYMENT_FAILED;
+    }
+
     public void cancel() {
         if (this.status == OrderStatus.CANCELLED) {
             throw new CoreException(ErrorType.BAD_REQUEST, "이미 취소된 주문입니다.");
+        }
+        if (this.status == OrderStatus.PAYMENT_PENDING || this.status == OrderStatus.PAYMENT_FAILED) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "결제가 완료된 주문만 취소할 수 있습니다.");
         }
         if (this.status == OrderStatus.DELIVERED) {
             throw new CoreException(ErrorType.BAD_REQUEST, "배송 완료된 주문은 취소할 수 없습니다.");
