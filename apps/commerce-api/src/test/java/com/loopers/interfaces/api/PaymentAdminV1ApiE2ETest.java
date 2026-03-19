@@ -111,7 +111,7 @@ class PaymentAdminV1ApiE2ETest {
     }
 
     private Long placeOrderAndGetPaymentId(Long productId) {
-        when(pgGateway.requestPayment(any())).thenReturn(new PgPaymentResponse("TX-001"));
+        when(pgGateway.requestPayment(any(), any())).thenReturn(new PgPaymentResponse("TX-001"));
         OrderV1Dto.CreateRequest request = new OrderV1Dto.CreateRequest(productId, 1, null, CARD_TYPE, CARD_NO);
         ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> response = testRestTemplate.exchange(
             "/api/v1/orders",
@@ -171,8 +171,8 @@ class PaymentAdminV1ApiE2ETest {
             Long paymentId = placeOrderAndGetPaymentId(product.getId());
             Long orderId = paymentJpaRepository.findById(paymentId).orElseThrow().getOrderId();
 
-            when(pgGateway.inquirePayment(paymentId))
-                .thenReturn(new PgPaymentStatusResponse(paymentId, "TX-001", "COMPLETED", null));
+            when(pgGateway.inquirePayment(any()))
+                .thenReturn(new PgPaymentStatusResponse("TX-001", "SUCCESS", null));
 
             // act
             ResponseEntity<ApiResponse<PaymentV1Dto.PaymentResponse>> response = testRestTemplate.exchange(
@@ -201,8 +201,8 @@ class PaymentAdminV1ApiE2ETest {
             Long paymentId = placeOrderAndGetPaymentId(product.getId());
             Long orderId = paymentJpaRepository.findById(paymentId).orElseThrow().getOrderId();
 
-            when(pgGateway.inquirePayment(paymentId))
-                .thenReturn(new PgPaymentStatusResponse(paymentId, null, "FAILED", "카드 한도 초과"));
+            when(pgGateway.inquirePayment(any()))
+                .thenReturn(new PgPaymentStatusResponse(null, "FAILED", "카드 한도 초과"));
 
             // act
             ResponseEntity<ApiResponse<PaymentV1Dto.PaymentResponse>> response = testRestTemplate.exchange(

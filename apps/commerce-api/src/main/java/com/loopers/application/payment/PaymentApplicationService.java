@@ -6,7 +6,6 @@ import com.loopers.domain.payment.PaymentStatus;
 import com.loopers.infrastructure.pg.PgCallbackRequest;
 import com.loopers.infrastructure.pg.PgGateway;
 import com.loopers.infrastructure.pg.PgPaymentRequest;
-import com.loopers.infrastructure.pg.PgPaymentResponse;
 import com.loopers.infrastructure.pg.PgPaymentStatusResponse;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
@@ -31,29 +30,31 @@ public class PaymentApplicationService {
         return paymentRepository.save(payment);
     }
 
-    public PgPaymentResponse requestToPg(Payment payment) {
+    @Transactional
+    public void requestToPg(Payment payment, Long userId) {
         PgPaymentRequest request = new PgPaymentRequest(
-            payment.getId(),
-            payment.getOrderId(),
+            Long.toString(payment.getOrderId()),
             payment.getCardType(),
             payment.getCardNo(),
             payment.getAmount(),
             callbackBaseUrl + "/" + payment.getId() + "/callback"
         );
-        return pgGateway.requestPayment(request);
+        var response = pgGateway.requestPayment(userId, request);
+        payment.storeTransactionKey(response.transactionKey());
+        paymentRepository.save(payment);
     }
 
     @Transactional
-    public void handleCallback(PgCallbackRequest callback) {
+    public Payment handleCallback(PgCallbackRequest callback) {
         Payment payment = paymentRepository.findById(callback.paymentId())
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "결제 정보를 찾을 수 없습니다."));
 
-        if ("COMPLETED".equals(callback.status())) {
-            payment.complete(callback.orderId() + ":TX:" + callback.paymentId());
+        if ("SUCCESS".equals(callback.status())) {
+            payment.complete(callback.transactionKey());
         } else {
             payment.fail(callback.failureReason());
         }
-        paymentRepository.save(payment);
+        return paymentRepository.save(payment);
     }
 
     @Transactional(readOnly = true)
@@ -77,13 +78,13 @@ public class PaymentApplicationService {
             return PaymentInfo.from(payment);
         }
 
-        PgPaymentStatusResponse pg = pgGateway.inquirePayment(paymentId);
+        PgPaymentStatusResponse pg = pgGateway.inquirePayment(payment.getPgTransactionId());
 
-        if ("COMPLETED".equals(pg.status())) {
-            payment.complete(pg.pgTransactionId());
+        if ("SUCCESS".equals(pg.status())) {
+            payment.complete(pg.transactionKey());
             paymentRepository.save(payment);
         } else if ("FAILED".equals(pg.status())) {
-            payment.fail(pg.failureReason());
+            payment.fail(pg.reason());
             paymentRepository.save(payment);
         }
 

@@ -2,12 +2,11 @@ package com.loopers.interfaces.api.payment;
 
 import com.loopers.application.payment.PaymentInfo;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 public class PaymentV1Dto {
 
     public record CallbackRequest(
-        @NotNull Long orderId,
+        @NotBlank String transactionKey,
         @NotBlank String status,
         String failureReason
     ) {

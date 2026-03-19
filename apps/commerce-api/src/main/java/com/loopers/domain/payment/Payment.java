@@ -54,6 +54,10 @@ public class Payment extends BaseEntity {
         this.status = PaymentStatus.PENDING;
     }
 
+    public void storeTransactionKey(String transactionKey) {
+        this.pgTransactionId = transactionKey;
+    }
+
     public void complete(String pgTransactionId) {
         if (this.status != PaymentStatus.PENDING) {
             throw new CoreException(ErrorType.BAD_REQUEST, "PENDING 상태의 결제만 완료 처리할 수 있습니다.");

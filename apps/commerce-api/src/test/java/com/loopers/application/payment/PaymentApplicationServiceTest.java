@@ -11,7 +11,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.annotation.Value;
 
 import java.util.Optional;
 
@@ -56,14 +55,14 @@ class PaymentApplicationServiceTest {
             verify(pgGateway, never()).inquirePayment(any());
         }
 
-        @DisplayName("PG가 COMPLETED를 반환하면 결제가 완료 처리된다.")
+        @DisplayName("PG가 SUCCESS를 반환하면 결제가 완료 처리된다.")
         @Test
-        void completesPayment_whenPgReportsCompleted() {
+        void completesPayment_whenPgReportsSuccess() {
             // arrange
             Payment payment = new Payment(ORDER_ID, 10000, "SAMSUNG", "1234-5678-9012-3456");
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
-            when(pgGateway.inquirePayment(PAYMENT_ID))
-                .thenReturn(new PgPaymentStatusResponse(PAYMENT_ID, "TX-001", "COMPLETED", null));
+            when(pgGateway.inquirePayment(any()))
+                .thenReturn(new PgPaymentStatusResponse("TX-001", "SUCCESS", null));
             when(paymentRepository.save(payment)).thenReturn(payment);
 
             // act
@@ -80,8 +79,8 @@ class PaymentApplicationServiceTest {
             // arrange
             Payment payment = new Payment(ORDER_ID, 10000, "SAMSUNG", "1234-5678-9012-3456");
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
-            when(pgGateway.inquirePayment(PAYMENT_ID))
-                .thenReturn(new PgPaymentStatusResponse(PAYMENT_ID, null, "FAILED", "카드 한도 초과"));
+            when(pgGateway.inquirePayment(any()))
+                .thenReturn(new PgPaymentStatusResponse(null, "FAILED", "카드 한도 초과"));
             when(paymentRepository.save(payment)).thenReturn(payment);
 
             // act
@@ -98,8 +97,8 @@ class PaymentApplicationServiceTest {
             // arrange
             Payment payment = new Payment(ORDER_ID, 10000, "SAMSUNG", "1234-5678-9012-3456");
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
-            when(pgGateway.inquirePayment(PAYMENT_ID))
-                .thenReturn(new PgPaymentStatusResponse(PAYMENT_ID, null, "PENDING", null));
+            when(pgGateway.inquirePayment(any()))
+                .thenReturn(new PgPaymentStatusResponse(null, "PENDING", null));
 
             // act
             PaymentInfo result = paymentApplicationService.syncWithPg(PAYMENT_ID);
