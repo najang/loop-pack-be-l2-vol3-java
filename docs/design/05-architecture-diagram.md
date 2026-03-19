@@ -12,13 +12,13 @@ HTTP Request
 | domain  (Business Logic Layer) |
 | Model · Service · Repository · Policy |
 | infrastructure  (Persistence Layer) |
-| JpaRepository · RepositoryImpl · Encoder |
+| JpaRepository · RepositoryImpl · Encoder · PgGateway · PgSimulatorClient · CallbackSignatureValidator |
 | support  (Cross-Cutting Concerns) |
 | auth · error |
 
     ↓
 
-DATABASE (MySQL)
+DATABASE (MySQL) / PG Simulator (HTTP)
 
 ## 1. interfaces/api (Presentation Layer)
 
@@ -46,6 +46,7 @@ DATABASE (MySQL)
 | Like | LikeV1Controller | POST/DELETE /api/v1/products/{productId}/likes,                                                           GET /api/v1/users/{userId}/likes |
 | Cart | CartV1Controller | POST /api/v1/cart/items, GET /api/v1/cart, PUT/DELETE /api/v1/cart/items/{productId}                                                       |
 | Order | OrderV1Controller | POST /api/v1/orders, GET /api/v1/orders, GET /api/v1/orders/{orderId}, PATCH /api/v1/orders/{orderId}/cancel                               |
+| Payment Callback | PaymentCallbackV1Controller | POST /api/v1/payments/{paymentId}/callback (X-PG-Signature 서명 검증 후 콜백 처리)                                                            |
 | Admin Brand | AdminBrandV1Controller | /api-admin/v1/brands CRUD                                                                                                                  |
 | Admin Product | AdminProductV1Controller | /api-admin/v1/products CRUD                                                                                                                |
 | Admin Order | AdminOrderV1Controller | /api-admin/v1/orders 조회/상태변경                                                                                                               |
@@ -75,6 +76,7 @@ DTO 설계 원칙: Java Record 사용, Bean Validation 어노테이션으로 입
     | CartFacade | 장바구니 + 상품 + 브랜드 | 장바구니 조회 (상품·브랜드 정보 조합) |
     | OrderFacade | 주문 + 상품 + 장바구니 | 주문 생성 (재고 차감 + 장바구니 정리) |
     | OrderFacade | 주문 + 상품 | 주문 취소 (상태 변경 + 재고 복원) |
+    | PaymentFacade | 주문 + 결제 | 주문+결제 생성 (단일 트랜잭션 + PG 요청), 콜백 처리 (결제 상태 + 주문 상태 전이) |
     | AdminBrandFacade | 브랜드 + 상품 | 브랜드 + 상품 |
     | AdminProductFacade | 상품 + 브랜드 | 상품 등록 (브랜드 존재 확인) |
 - Facade 불필요 (단일 서비스 호출 → Controller에서 직접 Service 호출)
@@ -99,6 +101,15 @@ DTO 설계 원칙: Java Record 사용, Bean Validation 어노테이션으로 입
 | ProductInfo | 상품 + 브랜드 + isLiked 조합 결과 |
 | CartInfo | 장바구니 + 상품 + 브랜드 조합 결과 |
 | OrderInfo | 주문 + 주문아이템(스냅샷) 결과 |
+| PaymentInfo | Payment 도메인 → 응답 변환 |
+
+**트랜잭션 경계 (PaymentFacade)**
+
+| 단계 | 트랜잭션 여부 | 이유 |
+| --- | --- | --- |
+| Order + Payment 저장 | 트랜잭션 내 (TransactionTemplate) | 원자성 보장 — 하나라도 실패 시 전체 롤백 |
+| PG 요청 (PgGateway) | 트랜잭션 외부 | PG 응답 지연 시 DB 커넥션 점유 방지 |
+| 콜백 처리 (handleCallback) | 트랜잭션 내 (@Transactional) | Payment 상태 + Order 상태 변경 원자성 보장 |
 
 ## 3. domain (Business Logic Layer)
 
@@ -184,6 +195,18 @@ changeQuantity(qty) | Aggregate Root |
 | LikeRepositoryImpl | LikeRepository | LikeJpaRepository |
 | CartRepositoryImpl | CartRepository | CartJpaRepository |
 | OrderRepositoryImpl | OrderRepository | OrderJpaRepository + QueryDSL (기간 조회) |
+| PaymentRepositoryImpl | PaymentRepository | PaymentJpaRepository |
+
+**PG 연동 인프라 (infrastructure/pg)**
+
+| 클래스 | 책임 |
+| --- | --- |
+| PgGateway | Resilience4j 래퍼 — CircuitBreaker + Retry + Bulkhead 적용. PG 장애 격리 및 fallback 처리 |
+| PgSimulatorClient | OpenFeign HTTP 클라이언트 — PG 시뮬레이터(POST /pg/v1/payments) 호출 |
+| CallbackSignatureValidator | HMAC-SHA256 서명 검증 — 위변조된 PG 콜백 차단 |
+| PgPaymentRequest | PG 결제 요청 DTO (paymentId, orderId, cardType, cardNo, amount, callbackUrl) |
+| PgPaymentResponse | PG 결제 응답 DTO (pgTransactionId) |
+| PgCallbackRequest | PG 콜백 요청 DTO (paymentId, orderId, status, failureReason) |
 
 ## 5. support (Cross-cutting concerns)
 
@@ -221,3 +244,19 @@ changeQuantity(qty) | Aggregate Root |
 주문 생성                ──→ CartItem 삭제                             (별도 트랜잭션, 실패해도 주문 유효)
 주문 생성                ──→ UserService.deductPoints()          (동일 트랜잭션, 잔액 부족 시 전체 롤백)
 주문 취소                ──→ UserService.refundPoints()           (동일 트랜잭션, finalTotalPrice 환불)
+PaymentFacade         ──→ OrderApplicationService.create()     (단일 트랜잭션 내, PENDING 주문 생성)
+                      ──→ PaymentApplicationService.create()   (동일 트랜잭션, PENDING 결제 생성)
+                      ──→ PgGateway.requestPayment()           (트랜잭션 외부, Resilience4j 적용)
+콜백 성공               ──→ OrderApplicationService.confirmPayment() (Order → PAID)
+콜백 실패               ──→ OrderApplicationService.failPayment()    (재고 복원 + 포인트 환불 + Order → CANCELLED)
+
+## 6. PG 시뮬레이터 (apps/pg-simulator)
+
+독립된 Spring Boot 애플리케이션으로 실제 PG사 역할을 대체한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 역할 | PG 결제 요청 수신 → 처리 후 commerce-api에 콜백 전송 |
+| 통신 방식 | commerce-api → PG Simulator: Feign HTTP, PG Simulator → commerce-api: HTTP 콜백 |
+| 콜백 서명 | HMAC-SHA256 서명을 X-PG-Signature 헤더에 포함 |
+| 장애 시뮬레이션 | 결제 실패 케이스 재현 가능 (failureReason 포함 콜백) |
