@@ -84,7 +84,7 @@ erDiagram
         bigint id PK
         bigint user_id FK
         bigint user_coupon_id FK "nullable"
-        varchar status "ORDERED / SHIPPING / DELIVERED / CANCELLED"
+        varchar status "ORDERED / SHIPPING / DELIVERED / CANCELLED / PAID"
         int original_total_price "쿠폰 적용 전 금액"
         int discount_amount "할인 금액 (쿠폰 없으면 0)"
         int final_total_price "최종 결제 금액"
@@ -107,6 +107,20 @@ erDiagram
         datetime deleted_at
     }
 
+    PAYMENTS {
+        bigint id PK
+        bigint order_id FK "ORDERS.id (1:1)"
+        varchar pg_transaction_id "nullable — PG 발급 거래 ID"
+        int amount
+        varchar status "PENDING / COMPLETED / FAILED"
+        varchar card_type
+        varchar card_no
+        varchar failure_reason "nullable"
+        datetime created_at
+        datetime updated_at
+        datetime deleted_at
+    }
+
     BRAND ||--o{ PRODUCT : "브랜드의 상품"
     PRODUCT ||--o{ LIKES : "상품에 대한 좋아요"
     USER ||--o{ LIKES : "좋아요"
@@ -118,6 +132,7 @@ erDiagram
     USER ||--o{ USER_COUPON : "쿠폰 보유"
     COUPON_TEMPLATE ||--o{ USER_COUPON : "발급된 쿠폰"
     USER_COUPON |o--o{ ORDERS : "주문에 적용 (nullable)"
+    ORDERS ||--|| PAYMENTS : "결제 (1:1)"
 ```
 
 ---
@@ -125,7 +140,7 @@ erDiagram
 ## 설계 포인트
 
 ### 1. Soft Delete 전략
-- `deleted_at`이 있는 테이블: USER, BRAND, PRODUCT, CART_ITEM, ORDERS, ORDER_ITEM, COUPON_TEMPLATE, USER_COUPON
+- `deleted_at`이 있는 테이블: USER, BRAND, PRODUCT, CART_ITEM, ORDERS, ORDER_ITEM, COUPON_TEMPLATE, USER_COUPON, PAYMENTS
 - `deleted_at`이 **없는** 테이블: LIKES (물리 삭제 — 좋아요 취소 시 행 자체 삭제)
 - 조회 시 `WHERE deleted_at IS NULL` 조건 필수 (사용자 API 기준)
 - COUPON_TEMPLATE: soft delete 후 어드민 목록에서 제외, 발급 불가 처리
@@ -155,7 +170,19 @@ erDiagram
 | USER_COUPON | `user_id` | 사용자별 쿠폰 목록 조회 |
 | USER_COUPON | `coupon_template_id` | 템플릿별 발급 내역 조회 |
 
-### 6. 동시성 제어 대상
+### 6. PAYMENTS 테이블 설계
+- ORDERS와 1:1 관계 — 주문 1건당 결제 1건
+- `pg_transaction_id`: PG 콜백 성공 시 채워짐 (PENDING 상태에서는 NULL)
+- `failure_reason`: FAILED 상태일 때만 값이 존재
+- `card_type` / `card_no`: 결제 시점 카드 정보 스냅샷
+- Soft delete 대상(`deleted_at` 포함) — 결제 이력 보존
+
+### 7. ORDERS.status 확장
+- 기존: `ORDERED / SHIPPING / DELIVERED / CANCELLED`
+- 추가: `PAID` — PG 콜백 성공 시 전이되는 결제 완료 상태
+- 사용자 주문 취소 가능 범위: `ORDERED` 상태만 허용 (PAID 이후 불가)
+
+### 8. 동시성 제어 대상
 - `PRODUCT.stock`: 주문 시 비관적 락 (`SELECT ... FOR UPDATE`, productId 오름차순)
 - `PRODUCT.like_count`: 좋아요 등록/취소 시 갱신 (동시성 제어 방식 결정 필요)
 - `USER.version`: 포인트 충전/차감 시 낙관적 락 (`@Version`)

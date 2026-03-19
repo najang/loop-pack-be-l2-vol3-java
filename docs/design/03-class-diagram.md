@@ -138,6 +138,7 @@ classDiagram
     SHIPPING
     DELIVERED
     CANCELLED
+    PAID
   }
 
   class OrderItem {
@@ -150,6 +151,37 @@ classDiagram
     -String brandName
   }
 
+  class Payment {
+    -Long orderId
+    -String pgTransactionId "nullable"
+    -int amount
+    -PaymentStatus status
+    -String cardType
+    -String cardNo
+    -String failureReason "nullable"
+    +complete(pgTransactionId)
+    +fail(reason)
+  }
+
+  class PaymentStatus {
+    <<enumeration>>
+    PENDING
+    COMPLETED
+    FAILED
+  }
+
+  class PaymentFacade {
+    +createOrderAndPay(userId, productId, qty, couponId, cardType, cardNo) OrderInfo
+    +handleCallback(PgCallbackRequest)
+  }
+
+  class PaymentApplicationService {
+    +create(orderId, amount, cardType, cardNo) Payment
+    +requestToPg(payment) PgPaymentResponse
+    +handleCallback(PgCallbackRequest)
+    +findByOrderId(orderId) Payment
+  }
+
   %% ─── Inheritance (BaseEntity) ───
   BaseEntity <|-- User
   BaseEntity <|-- Brand
@@ -159,10 +191,12 @@ classDiagram
   BaseEntity <|-- OrderItem
   BaseEntity <|-- CouponTemplate
   BaseEntity <|-- UserCoupon
+  BaseEntity <|-- Payment
 
   %% ─── Enum Relationships ───
   Product --> SellingStatus
   Order --> OrderStatus
+  Payment --> PaymentStatus
   CouponTemplate --> CouponType
   UserCoupon --> UserCouponStatus
 
@@ -180,6 +214,9 @@ classDiagram
   Order ..> UserCoupon : userCouponId 참조 (nullable)
   UserCoupon ..> User : userId 참조
   UserCoupon ..> CouponTemplate : couponTemplateId 참조
+  Payment ..> Order : orderId 참조
+  PaymentFacade --> OrderApplicationService : confirmPayment() / failPayment()
+  PaymentFacade --> PaymentApplicationService : create() / requestToPg() / handleCallback()
 
   %% ─── Cross-domain 서비스 의존 (UseCase 레벨) ───
   %% 좋아요 UseCase → Product.좋아요수증가/감소() 호출
@@ -189,6 +226,9 @@ classDiagram
   %% 주문 생성 UseCase → CouponService.validateAndUse() 호출 (동일 트랜잭션, 쿠폰 있을 때만)
   %% 주문 생성 UseCase → UserService.deductPoints() 호출 (동일 트랜잭션)
   %% 주문 취소 UseCase → UserService.refundPoints() 호출 (동일 트랜잭션)
+  %% PaymentFacade → OrderApplicationService.create() + PaymentApplicationService.create() (단일 트랜잭션)
+  %% PaymentFacade → PgGateway.requestPayment() (트랜잭션 외부, Resilience4j 적용)
+  %% PaymentFacade.handleCallback() → Payment 상태 + Order 상태 변경 (단일 트랜잭션)
 
   User --> Money : pointBalance
 ```
@@ -203,7 +243,8 @@ classDiagram
 
 ### 2. OrderStatus 상태 전이 규칙
 - `ORDERED → SHIPPING` / `ORDERED → CANCELLED` / `SHIPPING → DELIVERED`만 허용
-- `DELIVERED`, `CANCELLED`에서는 변경 불가
+- **Payment 콜백 전이**: `PENDING → PAID` (결제 성공), `PENDING → CANCELLED` (결제 실패)
+- `DELIVERED`, `CANCELLED`, `PAID`에서는 변경 불가
 - `상태변경(newStatus)` 메서드 내에서 전이 가능 여부 검증
 
 ### 3. Product.주문가능여부() 판단 기준
@@ -221,6 +262,9 @@ classDiagram
 | 주문 생성 (쿠폰 적용 시) | CouponService.validateAndUse() | 동일 트랜잭션 — 쿠폰 검증+사용처리+할인액 반환 |
 | 주문 생성 | UserService.deductPoints() | 동일 트랜잭션, 잔액 부족 시 전체 롤백 |
 | 주문 취소 | UserService.refundPoints() | 동일 트랜잭션, finalTotalPrice 환불 |
+| 주문+결제 생성 (PaymentFacade) | OrderApplicationService.create() + PaymentApplicationService.create() | 단일 트랜잭션 — 원자성 보장 |
+| 결제 콜백 성공 (PaymentFacade) | OrderApplicationService.confirmPayment() | Order → PAID 전이 |
+| 결제 콜백 실패 (PaymentFacade) | OrderApplicationService.failPayment() | 재고 복원 + 포인트 환불 + Order → CANCELLED |
 
 ### 6. Aggregate Boundary
 - **Order Aggregate**: Order(Root) + OrderItem → OrderItem은 독립 Repository 없이 Order를 통해서만 접근

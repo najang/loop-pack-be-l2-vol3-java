@@ -757,6 +757,94 @@ sequenceDiagram
 
 ---
 
+### 주문 생성 + 결제 요청
+
+**목적**: 주문과 결제를 단일 트랜잭션으로 원자적으로 저장한 뒤, PG 요청을 트랜잭션 외부에서 실행하는 이유(커넥션 점유 방지)를 확인한다.
+
+```mermaid
+sequenceDiagram
+    actor 사용자
+    participant Controller as OrderV1Controller
+    participant Facade as PaymentFacade
+    participant OrderSvc as OrderApplicationService
+    participant PaymentSvc as PaymentApplicationService
+    participant PgGateway
+    participant PgSimulator as PG Simulator
+
+    사용자->>Controller: POST /api/v1/orders (cardType, cardNo, ...)
+    Controller->>Facade: createOrderAndPay(userId, productId, qty, couponId, cardType, cardNo)
+
+    rect rgb(230, 240, 255)
+        note over Facade,PaymentSvc: 단일 트랜잭션 (TransactionTemplate)
+        Facade->>OrderSvc: create(userId, productId, qty, couponId) → Order(PENDING)
+        Facade->>PaymentSvc: create(orderId, amount, cardType, cardNo) → Payment(PENDING)
+    end
+
+    Facade->>PaymentSvc: requestToPg(payment) — 트랜잭션 외부
+    PaymentSvc->>PgGateway: requestPayment(PgPaymentRequest)
+    PgGateway->>PgSimulator: POST /pg/v1/payments (paymentId, callbackUrl, ...)
+    PgSimulator-->>PgGateway: { pgTransactionId }
+    PgGateway-->>PaymentSvc: PgPaymentResponse
+    PaymentSvc-->>Facade: PgPaymentResponse
+
+    Facade-->>Controller: OrderInfo
+    Controller-->>사용자: 202 Accepted (OrderInfo)
+```
+
+**핵심 포인트**:
+- Order(PENDING) + Payment(PENDING) 저장은 하나의 트랜잭션 — 어느 하나 실패 시 전체 롤백
+- PG 요청은 트랜잭션 커밋 후 실행 — PG 응답 지연으로 인한 DB 커넥션 점유 방지
+- PgGateway에 Resilience4j (CircuitBreaker + Retry + Bulkhead) 적용 — PG 장애 격리
+
+---
+
+### PG 콜백 처리 (결제 성공/실패)
+
+**목적**: PG 콜백 서명 검증(위변조 방지)과, 성공/실패에 따른 주문 상태 전이 및 보상 처리를 확인한다.
+
+```mermaid
+sequenceDiagram
+    participant PgSimulator as PG Simulator
+    participant CallbackCtrl as PaymentCallbackV1Controller
+    participant Validator as CallbackSignatureValidator
+    participant Facade as PaymentFacade
+    participant PaymentSvc as PaymentApplicationService
+    participant OrderSvc as OrderApplicationService
+
+    PgSimulator->>CallbackCtrl: POST /api/v1/payments/{paymentId}/callback\n(X-PG-Signature 헤더 포함)
+    CallbackCtrl->>Validator: validate(signature, paymentId, orderId, status)
+
+    alt 서명 검증 실패
+        Validator-->>CallbackCtrl: CoreException(UNAUTHORIZED)
+        CallbackCtrl-->>PgSimulator: 401 Unauthorized
+    else 서명 검증 성공
+        CallbackCtrl->>Facade: handleCallback(PgCallbackRequest)
+
+        rect rgb(230, 240, 255)
+            note over Facade,OrderSvc: 단일 트랜잭션 (@Transactional)
+            Facade->>PaymentSvc: handleCallback() → Payment 상태 변경
+
+            alt status == COMPLETED
+                PaymentSvc->>PaymentSvc: payment.complete(pgTransactionId)
+                Facade->>OrderSvc: confirmPayment(orderId) → Order(PAID)
+            else status == FAILED
+                PaymentSvc->>PaymentSvc: payment.fail(reason)
+                Facade->>OrderSvc: failPayment(orderId)
+                note over OrderSvc: 재고 복원 + 포인트 환불 + Order(CANCELLED)
+            end
+        end
+
+        CallbackCtrl-->>PgSimulator: 200 OK
+    end
+```
+
+**핵심 포인트**:
+- X-PG-Signature 헤더로 HMAC-SHA256 서명 검증 — 위변조된 콜백 차단
+- 성공: Payment(COMPLETED) + Order(PAID) 상태 전이
+- 실패: Payment(FAILED) + 재고 복원 + 포인트 환불 + Order(CANCELLED) — 주문 생성의 보상 트랜잭션
+
+---
+
 ## 어드민 API
 
 ---
