@@ -12,6 +12,7 @@ import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
@@ -55,6 +56,14 @@ public class PaymentApplicationService {
             payment.fail(callback.failureReason());
         }
         return paymentRepository.save(payment);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markAsFailed(Long paymentId, String reason) {
+        Payment payment = paymentRepository.findById(paymentId)
+            .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "결제 정보를 찾을 수 없습니다."));
+        payment.fail(reason);
+        paymentRepository.save(payment);
     }
 
     @Transactional(readOnly = true)
