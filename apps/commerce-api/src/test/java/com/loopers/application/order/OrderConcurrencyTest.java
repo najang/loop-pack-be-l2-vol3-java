@@ -7,11 +7,12 @@ import com.loopers.domain.coupon.CouponTemplate;
 import com.loopers.domain.coupon.CouponType;
 import com.loopers.domain.coupon.UserCoupon;
 import com.loopers.domain.coupon.UserCouponStatus;
+import com.loopers.domain.order.Order;
+import com.loopers.domain.order.OrderStatus;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
 import com.loopers.domain.user.UserModel;
-import com.loopers.domain.user.UserService;
 import com.loopers.infrastructure.user.UserJpaRepository;
 import com.loopers.utils.ConcurrencyTestHelper;
 import com.loopers.utils.ConcurrencyTestHelper.ConcurrencyResult;
@@ -26,8 +27,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -50,9 +49,6 @@ class OrderConcurrencyTest {
 
     @Autowired
     private CouponService couponService;
-
-    @Autowired
-    private UserService userService;
 
     @Autowired
     private UserJpaRepository userJpaRepository;
@@ -80,7 +76,6 @@ class OrderConcurrencyTest {
     @Test
     void concurrentOrders_onlyOneSucceedsWhenStockIsOne() throws Exception {
         // arrange
-        userService.chargePoints(userId, 10000);
         Product product = productService.create(brandId, "한정판 운동화", null, 1000, 1, SellingStatus.SELLING);
         Long productId = product.getId();
 
@@ -98,7 +93,6 @@ class OrderConcurrencyTest {
     @Test
     void concurrentOrders_couponIsUsedOnlyOnce() throws Exception {
         // arrange
-        userService.chargePoints(userId, 100000);
         Product product = productService.create(brandId, "운동화", null, 5000, 100, SellingStatus.SELLING);
         CouponTemplate template = couponService.saveTemplate(
             new CouponTemplate("정액 할인", CouponType.FIXED, 1000, null, ZonedDateTime.now().plusDays(7))
@@ -117,25 +111,64 @@ class OrderConcurrencyTest {
         assertThat(used.getStatus()).isEqualTo(UserCouponStatus.USED);
     }
 
-    @DisplayName("포인트 잔액이 부족한 상태에서 서로 다른 상품을 동시에 주문하면, 정확히 1건만 성공한다.")
+    @DisplayName("결제 성공/실패 콜백이 동시에 호출되면, 정확히 1건만 성공한다.")
     @Test
-    void concurrentOrders_onlyOneSucceedsWhenPointBalanceIsInsufficient() throws Exception {
-        // arrange — 잔액 10000, 각 주문 8000 → 동시 차감 시 1건만 성공해야 함
-        userService.chargePoints(userId, 10000);
-        List<Long> productIds = IntStream.range(0, THREAD_COUNT)
-            .mapToObj(i -> productService.create(brandId, "운동화 " + i, null, 8000, 100, SellingStatus.SELLING).getId())
-            .toList();
+    void simultaneousConfirmAndFail_exactlyOneSucceeds() throws Exception {
+        // arrange
+        Product product = productService.create(brandId, "한정판 운동화", null, 10000, 1, SellingStatus.SELLING);
+        Long productId = product.getId();
+        Order order = orderApplicationService.create(userId, productId, 1, null);
+        Long orderId = order.getId();
 
-        // act — 서로 다른 상품이므로 상품 락으로 직렬화되지 않아 포인트 낙관적 락이 동작함
-        List<Callable<Object>> tasks = IntStream.range(0, THREAD_COUNT)
-            .<Callable<Object>>mapToObj(i -> () -> orderApplicationService.create(userId, productIds.get(i), 1, null))
-            .toList();
-        ConcurrencyResult result = ConcurrencyTestHelper.run(tasks);
+        // act
+        ConcurrencyResult result = ConcurrencyTestHelper.run(List.of(
+            () -> { orderApplicationService.confirmPayment(orderId); return null; },
+            () -> { orderApplicationService.failPayment(orderId); return null; }
+        ));
 
         // assert
         assertThat(result.successCount()).isEqualTo(1);
-        assertThat(result.failureCount()).isEqualTo(THREAD_COUNT - 1);
-        UserModel user = userJpaRepository.findById(userId).orElseThrow();
-        assertThat(user.getPointBalance()).isGreaterThanOrEqualTo(0);
+        assertThat(result.failureCount()).isEqualTo(1);
+
+        Order finalOrder = orderApplicationService.findById(orderId);
+        assertThat(finalOrder.getStatus()).isIn(OrderStatus.ORDERED, OrderStatus.PAYMENT_FAILED);
+        assertThat(finalOrder.getStatus()).isNotEqualTo(OrderStatus.PAYMENT_PENDING);
+
+        Product finalProduct = productService.findById(productId);
+        if (finalOrder.getStatus() == OrderStatus.PAYMENT_FAILED) {
+            assertThat(finalProduct.getStock()).isEqualTo(1);
+        } else {
+            assertThat(finalProduct.getStock()).isEqualTo(0);
+        }
+    }
+
+    @DisplayName("결제 실패 콜백이 중복 호출되면, 재고와 쿠폰이 정확히 1번만 복원된다.")
+    @Test
+    void duplicateFailPayment_stockAndCouponRestoredOnlyOnce() throws Exception {
+        // arrange
+        Product product = productService.create(brandId, "운동화", null, 5000, 1, SellingStatus.SELLING);
+        Long productId = product.getId();
+        CouponTemplate template = couponService.saveTemplate(
+            new CouponTemplate("정액 할인", CouponType.FIXED, 1000, null, ZonedDateTime.now().plusDays(7))
+        );
+        UserCoupon userCoupon = couponService.issue(userId, template.getId());
+        Long userCouponId = userCoupon.getId();
+        Order order = orderApplicationService.create(userId, productId, 1, userCouponId);
+        Long orderId = order.getId();
+
+        // act
+        ConcurrencyResult result = ConcurrencyTestHelper.run(List.of(
+            () -> { orderApplicationService.failPayment(orderId); return null; },
+            () -> { orderApplicationService.failPayment(orderId); return null; }
+        ));
+
+        // assert
+        assertThat(result.successCount()).isEqualTo(2);
+
+        Product finalProduct = productService.findById(productId);
+        assertThat(finalProduct.getStock()).isEqualTo(1);
+
+        UserCoupon finalCoupon = couponService.findUserCouponById(userCouponId);
+        assertThat(finalCoupon.getStatus()).isEqualTo(UserCouponStatus.AVAILABLE);
     }
 }

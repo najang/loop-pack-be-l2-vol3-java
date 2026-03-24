@@ -210,6 +210,37 @@
 
 ---
 
+## 결제(Payment)
+
+[유저 스토리]
+
+- 사용자는 주문 생성 시 카드 정보(카드 타입, 카드 번호)를 함께 전달한다.
+- 시스템은 PG사에 결제를 요청하고, PG사 콜백으로 결제 성공/실패를 수신한다.
+- 결제 성공 시 주문 상태가 PAID로 변경된다.
+- 결제 실패 시 재고 복원, 포인트 환불, 주문 CANCELLED 처리한다.
+
+[기능 흐름]
+
+#### 1) 주문 생성 + 결제 요청(POST `/api/v1/orders`)
+
+1. 로그인 사용자만 가능
+2. 주문 아이템 목록 검증 + 카드 정보(cardType, cardNo) 포함 요청
+3. 단일 트랜잭션: 재고 차감 + 쿠폰 처리 + 포인트 차감 + 주문(PENDING) + 결제(PENDING) 저장
+4. 트랜잭션 커밋 후 PG 결제 요청(비동기, 커넥션 점유 방지)
+5. PG 응답으로 pgTransactionId 수신
+6. 202 Accepted 응답 (결제 완료 전이므로)
+
+#### 2) PG 콜백 수신(POST `/api/v1/payments/{paymentId}/callback`)
+
+1. X-PG-Signature 헤더로 서명 검증(HMAC-SHA256)
+2. 서명 불일치 시 401 Unauthorized 반환
+3. status == COMPLETED
+   - Payment → COMPLETED, Order → PAID
+4. status == FAILED
+   - Payment → FAILED, 재고 복원, 포인트 환불, Order → CANCELLED
+
+---
+
 ## 포인트(Point)
 
 [유저 스토리]
@@ -338,6 +369,10 @@
  항목          | 결정 |
 |-------------|------|
 | 판매 가능 여부    | 상태값(SELLING/STOP/SOLD_OUT) + 재고 복합 판단 |
+| PG 요청 트랜잭션 외부 실행 | PG 응답 지연 시 DB 커넥션 점유 방지 — 트랜잭션 커밋 후 PG 요청 |
+| 콜백 서명 검증    | HMAC-SHA256(X-PG-Signature) — PG 콜백 위변조 방지 |
+| Resilience4j 적용 | Circuit Breaker + Retry + Bulkhead — 외부 PG 장애 격리 및 과부하 방지 |
+| 주문+결제 단일 트랜잭션 | Order(PENDING) + Payment(PENDING) 원자성 보장 — 하나라도 실패 시 전체 롤백 |
 | 좋아요 수 관리    | Product에 likeCount 비정규화 | 
 | 장바구니 동일 상품  | 수량 누적 |
 | 삭제 전략       | Soft delete(deleteAt) |
@@ -363,3 +398,7 @@
 | 포인트 동시성 제어  | `UserModel.@Version` 낙관적 락                         |
 | 포인트 차감 시점   | 주문 생성 트랜잭션 내 (쿠폰 처리 직후)                          |
 | 포인트 환불 기준   | `finalTotalPrice` — 실제 결제 금액 전액 환불                 |
+| 결제 상태       | PENDING → COMPLETED \| FAILED                        |
+| 결제 실패 보상    | 재고 복원 + 포인트 환불 + Order CANCELLED (failPayment 흐름)  |
+| 결제 성공 처리    | confirmPayment() — Order PAID 상태로 전이                 |
+| PG 시뮬레이터   | 독립 Spring Boot 앱 (`apps/pg-simulator`) — 실제 PG 역할 수행 |

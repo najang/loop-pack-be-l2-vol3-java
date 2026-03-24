@@ -70,6 +70,14 @@ public class UserCoupon extends BaseEntity {
         this.usedAt = ZonedDateTime.now();
     }
 
+    public void restore() {
+        if (status != UserCouponStatus.USED) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "사용된 쿠폰만 복원할 수 있습니다.");
+        }
+        this.status = UserCouponStatus.AVAILABLE;
+        this.usedAt = null;
+    }
+
     public void expire() {
         this.status = UserCouponStatus.EXPIRED;
     }

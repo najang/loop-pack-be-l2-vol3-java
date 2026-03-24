@@ -73,6 +73,11 @@ public class CouponService {
     }
 
     @Transactional
+    public UserCoupon saveUserCoupon(UserCoupon userCoupon) {
+        return userCouponRepository.save(userCoupon);
+    }
+
+    @Transactional
     public int validateAndUse(Long userId, Long userCouponId, int orderAmount) {
         UserCoupon userCoupon = userCouponRepository.findById(userCouponId)
             .orElseThrow(() -> new CoreException(ErrorType.BAD_REQUEST, "쿠폰을 찾을 수 없습니다."));

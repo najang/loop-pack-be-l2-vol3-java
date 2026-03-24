@@ -1,5 +1,5 @@
 package com.loopers.domain.order;
 
 public enum OrderStatus {
-    ORDERED, SHIPPING, DELIVERED, CANCELLED
+    PAYMENT_PENDING, ORDERED, SHIPPING, DELIVERED, CANCELLED, PAYMENT_FAILED
 }

@@ -14,9 +14,13 @@ import com.loopers.infrastructure.brand.BrandJpaRepository;
 import com.loopers.infrastructure.coupon.CouponTemplateJpaRepository;
 import com.loopers.infrastructure.coupon.UserCouponJpaRepository;
 import com.loopers.infrastructure.order.OrderJpaRepository;
+import com.loopers.infrastructure.payment.PaymentJpaRepository;
+import com.loopers.infrastructure.pg.PgGateway;
+import com.loopers.infrastructure.pg.PgPaymentResponse;
 import com.loopers.infrastructure.product.ProductJpaRepository;
 import com.loopers.infrastructure.user.UserJpaRepository;
 import com.loopers.interfaces.api.order.OrderV1Dto;
+import com.loopers.interfaces.api.payment.PaymentV1Dto;
 import com.loopers.utils.DatabaseCleanUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +28,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -40,6 +45,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class OrderV1ApiE2ETest {
@@ -47,6 +54,8 @@ class OrderV1ApiE2ETest {
     private static final String LOGIN_ID = "testuser1";
     private static final String OTHER_LOGIN_ID = "otheruser1";
     private static final String RAW_PASSWORD = "Test1234!";
+    private static final String CARD_TYPE = "SAMSUNG";
+    private static final String CARD_NO = "1234-5678-9012-3456";
 
     @Autowired
     private TestRestTemplate testRestTemplate;
@@ -67,6 +76,9 @@ class OrderV1ApiE2ETest {
     private OrderJpaRepository orderJpaRepository;
 
     @Autowired
+    private PaymentJpaRepository paymentJpaRepository;
+
+    @Autowired
     private CouponTemplateJpaRepository couponTemplateJpaRepository;
 
     @Autowired
@@ -74,6 +86,9 @@ class OrderV1ApiE2ETest {
 
     @Autowired
     private DatabaseCleanUp databaseCleanUp;
+
+    @MockBean
+    private PgGateway pgGateway;
 
     @AfterEach
     void tearDown() {
@@ -90,15 +105,6 @@ class OrderV1ApiE2ETest {
         ));
     }
 
-    private void chargePoints(String loginId, int amount) {
-        testRestTemplate.exchange(
-            "/api/v1/users/me/points/charge",
-            HttpMethod.POST,
-            new HttpEntity<>(new com.loopers.interfaces.api.user.UserV1Dto.ChargePointRequest(amount), createAuthHeaders(loginId)),
-            new ParameterizedTypeReference<>() {}
-        );
-    }
-
     private HttpHeaders createAuthHeaders(String loginId) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Loopers-LoginId", loginId);
@@ -112,7 +118,7 @@ class OrderV1ApiE2ETest {
     }
 
     private ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> placeOrder(String loginId, Long productId, int quantity, Long couponId) {
-        OrderV1Dto.CreateRequest request = new OrderV1Dto.CreateRequest(productId, quantity, couponId);
+        OrderV1Dto.CreateRequest request = new OrderV1Dto.CreateRequest(productId, quantity, couponId, CARD_TYPE, CARD_NO);
         return testRestTemplate.exchange(
             "/api/v1/orders",
             HttpMethod.POST,
@@ -132,6 +138,11 @@ class OrderV1ApiE2ETest {
         return userCouponJpaRepository.save(new UserCoupon(userId, template.getId()));
     }
 
+    private void mockPgGatewaySuccess() {
+        when(pgGateway.requestPayment(any(), any()))
+            .thenReturn(new PgPaymentResponse("TX-001"));
+    }
+
     @DisplayName("POST /api/v1/orders")
     @Nested
     class CreateOrder {
@@ -141,7 +152,7 @@ class OrderV1ApiE2ETest {
         void returns401_whenNoAuth() {
             // arrange
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
-            OrderV1Dto.CreateRequest request = new OrderV1Dto.CreateRequest(product.getId(), 1, null);
+            OrderV1Dto.CreateRequest request = new OrderV1Dto.CreateRequest(product.getId(), 1, null, CARD_TYPE, CARD_NO);
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
@@ -160,7 +171,8 @@ class OrderV1ApiE2ETest {
         void returns404_whenProductNotFound() {
             // arrange
             createUser(LOGIN_ID);
-            OrderV1Dto.CreateRequest request = new OrderV1Dto.CreateRequest(99999L, 1, null);
+            mockPgGatewaySuccess();
+            OrderV1Dto.CreateRequest request = new OrderV1Dto.CreateRequest(99999L, 1, null, CARD_TYPE, CARD_NO);
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
@@ -179,13 +191,14 @@ class OrderV1ApiE2ETest {
         void returns400_whenProductIsNotSelling() {
             // arrange
             createUser(LOGIN_ID);
+            mockPgGatewaySuccess();
             Product product = createProduct("단종상품", 10000, 10, SellingStatus.STOP);
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
                 "/api/v1/orders",
                 HttpMethod.POST,
-                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, null), createAuthHeaders(LOGIN_ID)),
+                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, null, CARD_TYPE, CARD_NO), createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
 
@@ -198,13 +211,14 @@ class OrderV1ApiE2ETest {
         void returns400_whenQuantityExceedsStock() {
             // arrange
             createUser(LOGIN_ID);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 2, SellingStatus.SELLING);
 
             // act
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
                 "/api/v1/orders",
                 HttpMethod.POST,
-                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 5, null), createAuthHeaders(LOGIN_ID)),
+                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 5, null, CARD_TYPE, CARD_NO), createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
 
@@ -212,12 +226,12 @@ class OrderV1ApiE2ETest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         }
 
-        @DisplayName("쿠폰 없이 정상 주문이면, 201 Created와 OrderResponse(할인 없음)를 반환한다.")
+        @DisplayName("쿠폰 없이 정상 주문이면, 202 Accepted와 OrderResponse(PAYMENT_PENDING)를 반환한다.")
         @Test
-        void returns201WithOrderResponse_andDeductsStock() {
+        void returns202WithPaymentPendingStatus_andDeductsStock() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
 
             // act
@@ -225,9 +239,9 @@ class OrderV1ApiE2ETest {
 
             // assert
             assertAll(
-                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED),
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED),
                 () -> assertThat(response.getBody()).isNotNull(),
-                () -> assertThat(response.getBody().data().status()).isEqualTo("ORDERED"),
+                () -> assertThat(response.getBody().data().status()).isEqualTo("PAYMENT_PENDING"),
                 () -> assertThat(response.getBody().data().originalTotalPrice()).isEqualTo(30000),
                 () -> assertThat(response.getBody().data().discountAmount()).isEqualTo(0),
                 () -> assertThat(response.getBody().data().finalTotalPrice()).isEqualTo(30000),
@@ -243,12 +257,12 @@ class OrderV1ApiE2ETest {
             assertThat(updated.getStock()).isEqualTo(7);
         }
 
-        @DisplayName("FIXED 쿠폰을 적용하면, 201 Created와 할인이 반영된 OrderResponse를 반환한다.")
+        @DisplayName("FIXED 쿠폰을 적용하면, 202 Accepted와 할인이 반영된 OrderResponse를 반환한다.")
         @Test
-        void returns201WithDiscount_whenFixedCouponApplied() {
+        void returns202WithDiscount_whenFixedCouponApplied() {
             // arrange
             UserModel user = createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             UserCoupon userCoupon = createUserCoupon(user.getId(), 3000, CouponType.FIXED);
 
@@ -257,7 +271,7 @@ class OrderV1ApiE2ETest {
 
             // assert
             assertAll(
-                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED),
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED),
                 () -> assertThat(response.getBody().data().originalTotalPrice()).isEqualTo(20000),
                 () -> assertThat(response.getBody().data().discountAmount()).isEqualTo(3000),
                 () -> assertThat(response.getBody().data().finalTotalPrice()).isEqualTo(17000),
@@ -270,7 +284,7 @@ class OrderV1ApiE2ETest {
         void returns400_whenCouponAlreadyUsed() {
             // arrange
             UserModel user = createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             UserCoupon userCoupon = createUserCoupon(user.getId(), 1000, CouponType.FIXED);
             placeOrder(LOGIN_ID, product.getId(), 1, userCoupon.getId());
@@ -279,7 +293,7 @@ class OrderV1ApiE2ETest {
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
                 "/api/v1/orders",
                 HttpMethod.POST,
-                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, userCoupon.getId()), createAuthHeaders(LOGIN_ID)),
+                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, userCoupon.getId(), CARD_TYPE, CARD_NO), createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
 
@@ -293,6 +307,7 @@ class OrderV1ApiE2ETest {
             // arrange
             createUser(LOGIN_ID);
             UserModel otherUser = createUser(OTHER_LOGIN_ID);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             UserCoupon otherUserCoupon = createUserCoupon(otherUser.getId(), 1000, CouponType.FIXED);
 
@@ -300,12 +315,67 @@ class OrderV1ApiE2ETest {
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
                 "/api/v1/orders",
                 HttpMethod.POST,
-                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, otherUserCoupon.getId()), createAuthHeaders(LOGIN_ID)),
+                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, otherUserCoupon.getId(), CARD_TYPE, CARD_NO), createAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
 
             // assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+
+        @DisplayName("성공 콜백 수신 후 주문 상태가 ORDERED로 변경된다.")
+        @Test
+        void orderStatusBecomesOrdered_afterSuccessCallback() {
+            // arrange
+            UserModel user = createUser(LOGIN_ID);
+            mockPgGatewaySuccess();
+            Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
+            ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
+            Long orderId = created.getBody().data().id();
+
+            Long paymentId = paymentJpaRepository.findByOrderId(orderId).orElseThrow().getId();
+
+            // act
+            PaymentV1Dto.CallbackRequest callbackRequest = new PaymentV1Dto.CallbackRequest("TX-001", "SUCCESS", null);
+            testRestTemplate.exchange(
+                "/api/v1/payments/" + paymentId + "/callback",
+                HttpMethod.POST,
+                new HttpEntity<>(callbackRequest),
+                Void.class
+            );
+
+            // assert
+            Order order = orderJpaRepository.findByIdAndDeletedAtIsNull(orderId).orElseThrow();
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.ORDERED);
+        }
+
+        @DisplayName("실패 콜백 수신 후 주문 상태가 PAYMENT_FAILED로 변경되고 재고가 복원된다.")
+        @Test
+        void orderStatusBecomesPaymentFailed_andStockRestored_afterFailCallback() {
+            // arrange
+            UserModel user = createUser(LOGIN_ID);
+            mockPgGatewaySuccess();
+            Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
+            ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 3);
+            Long orderId = created.getBody().data().id();
+
+            Long paymentId = paymentJpaRepository.findByOrderId(orderId).orElseThrow().getId();
+
+            // act
+            PaymentV1Dto.CallbackRequest callbackRequest = new PaymentV1Dto.CallbackRequest("TX-001", "FAILED", "카드 한도 초과");
+            testRestTemplate.exchange(
+                "/api/v1/payments/" + paymentId + "/callback",
+                HttpMethod.POST,
+                new HttpEntity<>(callbackRequest),
+                Void.class
+            );
+
+            // assert
+            Order order = orderJpaRepository.findByIdAndDeletedAtIsNull(orderId).orElseThrow();
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_FAILED);
+
+            Product restoredProduct = productJpaRepository.findByIdAndDeletedAtIsNull(product.getId()).orElseThrow();
+            assertThat(restoredProduct.getStock()).isEqualTo(10);
         }
     }
 
@@ -318,7 +388,7 @@ class OrderV1ApiE2ETest {
         void returns401_whenNoAuth() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();
@@ -340,7 +410,7 @@ class OrderV1ApiE2ETest {
         void returns200WithOrderResponse_whenOwnerRequests() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 2);
             Long orderId = created.getBody().data().id();
@@ -357,7 +427,7 @@ class OrderV1ApiE2ETest {
             assertAll(
                 () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
                 () -> assertThat(response.getBody().data().id()).isEqualTo(orderId),
-                () -> assertThat(response.getBody().data().status()).isEqualTo("ORDERED"),
+                () -> assertThat(response.getBody().data().status()).isEqualTo("PAYMENT_PENDING"),
                 () -> assertThat(response.getBody().data().finalTotalPrice()).isEqualTo(20000)
             );
         }
@@ -367,8 +437,8 @@ class OrderV1ApiE2ETest {
         void returns404_whenOtherUserRequests() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
             createUser(OTHER_LOGIN_ID);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();
@@ -438,9 +508,8 @@ class OrderV1ApiE2ETest {
         void returns200WithOnlyUserOrders() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
             createUser(OTHER_LOGIN_ID);
-            chargePoints(OTHER_LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             placeOrder(LOGIN_ID, product.getId(), 1);
             placeOrder(LOGIN_ID, product.getId(), 1);
@@ -474,7 +543,7 @@ class OrderV1ApiE2ETest {
         void returns401_whenNoAuth() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();
@@ -491,15 +560,19 @@ class OrderV1ApiE2ETest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         }
 
-        @DisplayName("정상 취소이면, 204 No Content를 반환하고 재고가 복원된다.")
+        @DisplayName("ORDERED 상태 주문을 정상 취소하면, 204 No Content를 반환하고 재고가 복원된다.")
         @Test
         void returns204AndRestoresStock_whenCancelSucceeds() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 3);
             Long orderId = created.getBody().data().id();
+
+            Order order = orderJpaRepository.findByIdAndDeletedAtIsNull(orderId).orElseThrow();
+            order.confirmPayment();
+            orderJpaRepository.save(order);
 
             // act
             ResponseEntity<Void> response = testRestTemplate.exchange(
@@ -521,8 +594,8 @@ class OrderV1ApiE2ETest {
         void returns404_whenOtherUserTriesToCancel() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
             createUser(OTHER_LOGIN_ID);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();
@@ -544,10 +617,15 @@ class OrderV1ApiE2ETest {
         void returns400_whenOrderAlreadyCancelled() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();
+
+            Order order = orderJpaRepository.findByIdAndDeletedAtIsNull(orderId).orElseThrow();
+            order.confirmPayment();
+            orderJpaRepository.save(order);
+
             testRestTemplate.exchange(
                 "/api/v1/orders/" + orderId + "/cancel",
                 HttpMethod.PATCH,
@@ -572,7 +650,7 @@ class OrderV1ApiE2ETest {
         void returns400_whenOrderIsDelivered() {
             // arrange
             createUser(LOGIN_ID);
-            chargePoints(LOGIN_ID, 1_000_000);
+            mockPgGatewaySuccess();
             Product product = createProduct("에어맥스", 10000, 10, SellingStatus.SELLING);
             ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> created = placeOrder(LOGIN_ID, product.getId(), 1);
             Long orderId = created.getBody().data().id();

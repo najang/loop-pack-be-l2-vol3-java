@@ -1,6 +1,7 @@
 package com.loopers.interfaces.api.order;
 
 import com.loopers.application.order.OrderFacade;
+import com.loopers.application.payment.PaymentFacade;
 import com.loopers.domain.user.UserModel;
 import com.loopers.interfaces.api.ApiResponse;
 import com.loopers.support.auth.LoginUser;
@@ -26,16 +27,24 @@ import java.util.List;
 public class OrderV1Controller implements OrderV1ApiSpec {
 
     private final OrderFacade orderFacade;
+    private final PaymentFacade paymentFacade;
 
     @PostMapping("/orders")
-    @ResponseStatus(HttpStatus.CREATED)
+    @ResponseStatus(HttpStatus.ACCEPTED)
     @Override
     public ApiResponse<OrderV1Dto.OrderResponse> createOrder(
         @LoginUser UserModel user,
         @Valid @RequestBody OrderV1Dto.CreateRequest request
     ) {
         return ApiResponse.success(OrderV1Dto.OrderResponse.from(
-            orderFacade.create(user.getId(), request.productId(), request.quantity(), request.couponId())
+            paymentFacade.createOrderAndPay(
+                user.getId(),
+                request.productId(),
+                request.quantity(),
+                request.couponId(),
+                request.cardType(),
+                request.cardNo()
+            )
         ));
     }
 
