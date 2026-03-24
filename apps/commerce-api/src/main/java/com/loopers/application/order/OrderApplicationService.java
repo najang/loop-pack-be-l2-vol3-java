@@ -7,6 +7,7 @@ import com.loopers.domain.coupon.UserCoupon;
 import com.loopers.domain.order.Order;
 import com.loopers.domain.order.OrderItem;
 import com.loopers.domain.order.OrderRepository;
+import com.loopers.domain.order.OrderStatus;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
@@ -83,16 +84,28 @@ public class OrderApplicationService {
 
     @Transactional
     public void confirmPayment(Long orderId) {
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdWithLock(orderId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
+
+        if (order.getStatus() == OrderStatus.ORDERED) {
+            return;
+        }
+
         order.confirmPayment();
         orderRepository.save(order);
     }
 
     @Transactional
     public void failPayment(Long orderId) {
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdWithLock(orderId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
+
+        if (order.getStatus() == OrderStatus.PAYMENT_FAILED) {
+            return;
+        }
+
+        order.failPayment();
+        orderRepository.save(order);
 
         List<OrderItem> sortedItems = order.getItems().stream()
             .sorted(Comparator.comparing(OrderItem::getProductId))
@@ -110,9 +123,6 @@ public class OrderApplicationService {
             userCoupon.restore();
             couponService.saveUserCoupon(userCoupon);
         }
-
-        order.failPayment();
-        orderRepository.save(order);
     }
 
     @Transactional

@@ -6,6 +6,7 @@ import java.util.Optional;
 
 public interface OrderRepository {
     Optional<Order> findById(Long id);
+    Optional<Order> findByIdWithLock(Long id);
     List<Order> findByUserId(Long userId);
     List<Order> findByUserIdAndPeriod(Long userId, ZonedDateTime startAt, ZonedDateTime endAt);
     List<Order> findAllByPeriod(ZonedDateTime startAt, ZonedDateTime endAt);
