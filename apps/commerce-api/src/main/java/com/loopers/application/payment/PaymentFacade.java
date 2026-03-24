@@ -33,7 +33,13 @@ public class PaymentFacade {
             return new OrderAndPayment(order, payment);
         }));
 
-        paymentApplicationService.requestToPg(pair.payment(), userId);
+        try {
+            paymentApplicationService.requestToPg(pair.payment(), userId);
+        } catch (Exception e) {
+            paymentApplicationService.markAsFailed(pair.payment().getId(), "PG 요청 실패: " + e.getMessage());
+            orderApplicationService.failPayment(pair.order().getId());
+            throw e;
+        }
 
         return OrderInfo.from(pair.order());
     }
