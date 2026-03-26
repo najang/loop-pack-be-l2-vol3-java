@@ -6,9 +6,12 @@ import com.loopers.config.redis.RedisConfig;
 import com.loopers.domain.brand.BrandService;
 import com.loopers.application.like.LikeApplicationService;
 import com.loopers.domain.product.Product;
+import com.loopers.domain.product.ProductMetricsRepository;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
+import com.loopers.domain.event.UserActionEvent;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -33,22 +36,28 @@ public class ProductFacade {
     private final ProductService productService;
     private final BrandService brandService;
     private final LikeApplicationService likeService;
+    private final ProductMetricsRepository productMetricsRepository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProductFacade(
         ProductService productService,
         BrandService brandService,
         LikeApplicationService likeService,
+        ProductMetricsRepository productMetricsRepository,
         RedisTemplate<String, String> redisTemplate,
         @Qualifier(RedisConfig.REDIS_TEMPLATE_MASTER) RedisTemplate<String, String> masterRedisTemplate,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        ApplicationEventPublisher eventPublisher
     ) {
         this.productService = productService;
         this.brandService = brandService;
         this.likeService = likeService;
+        this.productMetricsRepository = productMetricsRepository;
         this.redisTemplate = redisTemplate;
         this.masterRedisTemplate = masterRedisTemplate;
         this.objectMapper = objectMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     public ProductInfo findById(Long productId) {
@@ -76,13 +85,22 @@ public class ProductFacade {
         }
 
         // 캐시 미스: DB 조회 후 isLiked=null 상태로 캐시 저장
+        // likeCount는 product_metrics에서 읽는다 (Eventual Consistency).
         Product product = productService.findById(productId);
-        ProductInfo info = ProductInfo.from(product);
+        int likeCount = productMetricsRepository.findByProductId(productId)
+            .map(m -> m.getLikeCount())
+            .orElse(0);
+        ProductInfo info = ProductInfo.from(product, likeCount, null);
         try {
             masterRedisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(info), Duration.ofMinutes(1));
         } catch (JsonProcessingException ignored) {
         }
         Boolean isLiked = userId != null ? likeService.isLiked(userId, productId) : null;
+        if (userId != null) {
+            eventPublisher.publishEvent(new UserActionEvent(
+                UserActionEvent.EventType.PRODUCT_VIEWED, userId, productId, null
+            ));
+        }
         return info.withIsLiked(isLiked);
     }
 
