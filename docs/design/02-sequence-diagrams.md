@@ -430,43 +430,6 @@ sequenceDiagram
 
 ---
 
-### 포인트 충전
-
-**목적**: 인증 확인, 충전 금액 검증, 낙관적 락 기반 포인트 충전 흐름을 확인한다.
-
-```mermaid
-sequenceDiagram
-    actor 사용자
-    participant API
-    participant 사용자서비스
-    participant DB
-
-    사용자->>API: 포인트 충전 요청 (POST /api/v1/users/me/points/charge)
-    Note over API: 인증 확인
-
-    alt 인증 실패
-        API-->>사용자: 401 Unauthorized
-    else 인증 통과
-        Note over API: amount <= 0이면 400 Bad Request
-        API->>사용자서비스: 포인트 충전 요청 (userId, amount)
-        사용자서비스->>DB: 사용자 조회 (@Version 포함)
-        DB-->>사용자서비스: 사용자 정보
-
-        사용자서비스->>사용자서비스: chargePoints(amount) 호출
-        사용자서비스->>DB: point_balance 갱신 (낙관적 락)
-
-        사용자서비스-->>API: 충전 후 잔액
-        API-->>사용자: 201 Created
-    end
-```
-
-**핵심 포인트**:
-- 인증 필수 — 미인증 시 401
-- amount <= 0이면 400 Bad Request
-- 낙관적 락(`@Version`)으로 동시 충전 시 충돌 방지
-
----
-
 ### 쿠폰 발급
 
 **목적**: 쿠폰 템플릿 유효성 검증 흐름과 발급 상태(AVAILABLE) 초기화를 확인한다.
@@ -595,14 +558,6 @@ sequenceDiagram
             Note over UseCase: discountAmount = 0
         end
 
-        UseCase->>사용자서비스: 포인트 차감 (finalAmount)
-        alt 잔액 부족
-            사용자서비스-->>UseCase: BAD_REQUEST
-            UseCase-->>API: BAD_REQUEST
-            API-->>사용자: 400 Bad Request
-        else 차감 성공
-            사용자서비스-->>UseCase: 차감 완료
-        end
 
         주문->>DB: 주문 저장 (originalTotalPrice, discountAmount, finalTotalPrice)
         주문->>DB: 주문 아이템 스냅샷 저장
@@ -742,9 +697,6 @@ sequenceDiagram
             상품->>DB: 재고 복원 반영
         end
 
-        UseCase->>사용자서비스: 포인트 환불 (finalTotalPrice)
-        사용자서비스->>DB: point_balance 복원
-
         UseCase-->>API: 취소 완료
         API-->>사용자: 200 OK
     end
@@ -830,7 +782,7 @@ sequenceDiagram
             else status == FAILED
                 PaymentSvc->>PaymentSvc: payment.fail(reason)
                 Facade->>OrderSvc: failPayment(orderId)
-                note over OrderSvc: 재고 복원 + 포인트 환불 + Order(CANCELLED)
+                note over OrderSvc: 재고 복원 + 쿠폰 복원 + Order(PAYMENT_FAILED)
             end
         end
 
@@ -841,7 +793,7 @@ sequenceDiagram
 **핵심 포인트**:
 - X-PG-Signature 헤더로 HMAC-SHA256 서명 검증 — 위변조된 콜백 차단
 - 성공: Payment(COMPLETED) + Order(PAID) 상태 전이
-- 실패: Payment(FAILED) + 재고 복원 + 포인트 환불 + Order(CANCELLED) — 주문 생성의 보상 트랜잭션
+- 실패: Payment(FAILED) + 재고 복원 + 쿠폰 복원 + Order(PAYMENT_FAILED) — 주문 생성의 보상 트랜잭션
 
 ---
 
