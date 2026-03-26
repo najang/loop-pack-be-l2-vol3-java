@@ -1,11 +1,14 @@
 package com.loopers.interfaces.api;
 
+import com.loopers.domain.coupon.CouponIssueResult;
+import com.loopers.domain.coupon.CouponIssueStatus;
 import com.loopers.domain.coupon.CouponTemplate;
 import com.loopers.domain.coupon.CouponType;
 import com.loopers.domain.coupon.UserCoupon;
 import com.loopers.domain.coupon.UserCouponStatus;
 import com.loopers.domain.user.PasswordEncoder;
 import com.loopers.domain.user.UserModel;
+import com.loopers.infrastructure.coupon.CouponIssueResultJpaRepository;
 import com.loopers.infrastructure.coupon.CouponTemplateJpaRepository;
 import com.loopers.infrastructure.coupon.UserCouponJpaRepository;
 import com.loopers.infrastructure.user.UserJpaRepository;
@@ -54,6 +57,9 @@ class CouponV1ApiE2ETest {
     private UserCouponJpaRepository userCouponJpaRepository;
 
     @Autowired
+    private CouponIssueResultJpaRepository couponIssueResultJpaRepository;
+
+    @Autowired
     private DatabaseCleanUp databaseCleanUp;
 
     @AfterEach
@@ -81,6 +87,12 @@ class CouponV1ApiE2ETest {
     private CouponTemplate createActiveTemplate() {
         return couponTemplateJpaRepository.save(
             new CouponTemplate("테스트 할인", CouponType.FIXED, 1000, null, ZonedDateTime.now().plusDays(7))
+        );
+    }
+
+    private CouponTemplate createFcfsTemplate(int maxQuantity) {
+        return couponTemplateJpaRepository.save(
+            new CouponTemplate("선착순 쿠폰", CouponType.FIXED, 2000, null, ZonedDateTime.now().plusDays(7), maxQuantity)
         );
     }
 
@@ -188,6 +200,93 @@ class CouponV1ApiE2ETest {
                 () -> assertThat(response.getBody().data().status()).isEqualTo(UserCouponStatus.AVAILABLE.name()),
                 () -> assertThat(response.getBody().data().usedAt()).isNull()
             );
+        }
+
+        @DisplayName("선착순(FCFS) 쿠폰이면, 202 Accepted와 requestId를 반환한다.")
+        @Test
+        void returns202WithRequestId_whenFcfsCoupon() {
+            // arrange
+            createUser();
+            CouponTemplate fcfsTemplate = createFcfsTemplate(100);
+
+            // act
+            ResponseEntity<ApiResponse<CouponV1Dto.CouponIssueRequestResponse>> response = testRestTemplate.exchange(
+                "/api/v1/coupons/" + fcfsTemplate.getId() + "/issue",
+                HttpMethod.POST,
+                new HttpEntity<>(null, createAuthHeaders()),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED),
+                () -> assertThat(response.getBody().data().requestId()).isNotNull()
+            );
+        }
+    }
+
+    @DisplayName("GET /api/v1/coupons/issue/{requestId}")
+    @Nested
+    class GetIssueResult {
+
+        @DisplayName("인증 없이 요청하면, 401 Unauthorized를 반환한다.")
+        @Test
+        void returns401_whenNoAuth() {
+            // act
+            ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
+                "/api/v1/coupons/issue/some-request-id",
+                HttpMethod.GET,
+                new HttpEntity<>(null),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        @DisplayName("존재하는 requestId로 조회하면, 200 OK와 발급 결과를 반환한다.")
+        @Test
+        void returns200WithIssueResult() {
+            // arrange
+            UserModel user = createUser();
+            CouponTemplate fcfsTemplate = createFcfsTemplate(100);
+            CouponIssueResult issueResult = couponIssueResultJpaRepository.save(
+                new CouponIssueResult(user.getId(), fcfsTemplate.getId())
+            );
+
+            // act
+            ResponseEntity<ApiResponse<CouponV1Dto.CouponIssueResultResponse>> response = testRestTemplate.exchange(
+                "/api/v1/coupons/issue/" + issueResult.getRequestId(),
+                HttpMethod.GET,
+                new HttpEntity<>(createAuthHeaders()),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> assertThat(response.getBody().data().requestId()).isEqualTo(issueResult.getRequestId()),
+                () -> assertThat(response.getBody().data().couponTemplateId()).isEqualTo(fcfsTemplate.getId()),
+                () -> assertThat(response.getBody().data().status()).isEqualTo(CouponIssueStatus.PENDING.name())
+            );
+        }
+
+        @DisplayName("존재하지 않는 requestId로 조회하면, 404 Not Found를 반환한다.")
+        @Test
+        void returns404_whenRequestIdNotFound() {
+            // arrange
+            createUser();
+
+            // act
+            ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
+                "/api/v1/coupons/issue/non-existent-request-id",
+                HttpMethod.GET,
+                new HttpEntity<>(createAuthHeaders()),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         }
     }
 
