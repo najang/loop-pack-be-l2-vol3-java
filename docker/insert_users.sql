@@ -1,4 +1,4 @@
-INSERT INTO users (login_id, password, name, email, birth_date, point_balance, version, created_at, updated_at)
+INSERT INTO users (login_id, password, name, email, birth_date, created_at, updated_at)
 WITH RECURSIVE seq AS (
   SELECT 1 AS n
   UNION ALL
@@ -17,8 +17,6 @@ SELECT
   ),
   CONCAT('user', n, '@loopers.com'),
   DATE_SUB('2000-01-01', INTERVAL FLOOR(RAND() * 3650) DAY),
-  0,
-  0,
   DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 365) DAY),
   NOW()
 FROM seq;
