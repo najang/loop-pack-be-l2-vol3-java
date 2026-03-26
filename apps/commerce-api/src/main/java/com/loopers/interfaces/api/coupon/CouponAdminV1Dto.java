@@ -23,7 +23,8 @@ public class CouponAdminV1Dto {
         Integer value,
         Integer minOrderAmount,
         @NotNull(message = "쿠폰 유효 기간은 필수입니다.")
-        ZonedDateTime expiredAt
+        ZonedDateTime expiredAt,
+        Integer maxQuantity
     ) {}
 
     public record UpdateRequest(
@@ -46,7 +47,9 @@ public class CouponAdminV1Dto {
         int value,
         Integer minOrderAmount,
         ZonedDateTime expiredAt,
-        boolean isActive
+        boolean isActive,
+        Integer maxQuantity,
+        int issuedCount
     ) {
         public static CouponResponse from(CouponInfo info) {
             return new CouponResponse(
@@ -56,7 +59,9 @@ public class CouponAdminV1Dto {
                 info.value(),
                 info.minOrderAmount(),
                 info.expiredAt(),
-                info.isActive()
+                info.isActive(),
+                info.maxQuantity(),
+                info.issuedCount()
             );
         }
     }

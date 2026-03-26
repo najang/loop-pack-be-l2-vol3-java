@@ -45,7 +45,7 @@ public class CouponAdminV1Controller implements CouponAdminV1ApiSpec {
         @Valid @RequestBody CouponAdminV1Dto.CreateRequest request
     ) {
         return ApiResponse.success(CouponAdminV1Dto.CouponResponse.from(
-            couponFacade.createTemplate(request.name(), request.type(), request.value(), request.minOrderAmount(), request.expiredAt())
+            couponFacade.createTemplate(request.name(), request.type(), request.value(), request.minOrderAmount(), request.expiredAt(), request.maxQuantity())
         ));
     }
 

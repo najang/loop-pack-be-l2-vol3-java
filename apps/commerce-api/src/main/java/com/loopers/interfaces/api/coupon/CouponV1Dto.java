@@ -1,6 +1,8 @@
 package com.loopers.interfaces.api.coupon;
 
 import com.loopers.application.coupon.CouponInfo;
+import com.loopers.application.coupon.CouponIssueRequestInfo;
+import com.loopers.application.coupon.CouponIssueResultInfo;
 import com.loopers.application.coupon.UserCouponInfo;
 
 import java.time.ZonedDateTime;
@@ -24,6 +26,18 @@ public class CouponV1Dto {
                 info.minOrderAmount(),
                 info.expiredAt()
             );
+        }
+    }
+
+    public record CouponIssueRequestResponse(String requestId) {
+        public static CouponIssueRequestResponse from(CouponIssueRequestInfo info) {
+            return new CouponIssueRequestResponse(info.requestId());
+        }
+    }
+
+    public record CouponIssueResultResponse(String requestId, Long couponTemplateId, String status) {
+        public static CouponIssueResultResponse from(CouponIssueResultInfo info) {
+            return new CouponIssueResultResponse(info.requestId(), info.couponTemplateId(), info.status());
         }
     }
 

@@ -36,10 +36,20 @@ public class CouponTemplate extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     private boolean isActive;
 
+    @Column(name = "max_quantity")
+    private Integer maxQuantity;
+
+    @Column(name = "issued_count", nullable = false)
+    private int issuedCount;
+
     protected CouponTemplate() {
     }
 
     public CouponTemplate(String name, CouponType type, int value, Integer minOrderAmount, ZonedDateTime expiredAt) {
+        this(name, type, value, minOrderAmount, expiredAt, null);
+    }
+
+    public CouponTemplate(String name, CouponType type, int value, Integer minOrderAmount, ZonedDateTime expiredAt, Integer maxQuantity) {
         validate(name, type, value, expiredAt);
         this.name = name;
         this.type = type;
@@ -47,6 +57,12 @@ public class CouponTemplate extends BaseEntity {
         this.minOrderAmount = minOrderAmount;
         this.expiredAt = expiredAt;
         this.isActive = true;
+        this.maxQuantity = maxQuantity;
+        this.issuedCount = 0;
+    }
+
+    public boolean isFcfs() {
+        return maxQuantity != null;
     }
 
     public boolean canIssue() {
