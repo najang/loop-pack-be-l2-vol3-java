@@ -9,6 +9,8 @@ import com.loopers.domain.coupon.UserCoupon;
 import com.loopers.domain.order.Order;
 import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.order.OrderStatus;
+import com.loopers.domain.outbox.OutboxEvent;
+import com.loopers.infrastructure.outbox.OutboxEventJpaRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
@@ -63,6 +65,9 @@ class OrderApplicationServiceIntegrationTest {
     private UserJpaRepository userJpaRepository;
 
     @Autowired
+    private OutboxEventJpaRepository outboxEventJpaRepository;
+
+    @Autowired
     private DatabaseCleanUp databaseCleanUp;
 
     @BeforeEach
@@ -112,6 +117,22 @@ class OrderApplicationServiceIntegrationTest {
 
             Product updatedProduct = productService.findById(product.getId());
             assertThat(updatedProduct.getStock()).isEqualTo(STOCK - 3);
+        }
+
+        @DisplayName("정상 주문이면, outbox_events에 ORDER_CREATED 레코드가 생성된다.")
+        @Test
+        void savesOutboxEvent_whenOrderCreated() {
+            // arrange
+            Product product = productService.create(brandId, PRODUCT_NAME, null, PRICE, STOCK, SellingStatus.SELLING);
+
+            // act
+            Order order = orderApplicationService.create(userId, product.getId(), 1, null);
+
+            // assert
+            List<OutboxEvent> events = outboxEventJpaRepository.findByPublishedFalseOrderByCreatedAtAsc();
+            assertThat(events).hasSize(1);
+            assertThat(events.get(0).getTopic()).isEqualTo("order-events");
+            assertThat(events.get(0).getPartitionKey()).isEqualTo(String.valueOf(order.getId()));
         }
 
         @DisplayName("FIXED 쿠폰을 적용하면, discountAmount가 차감되고 finalTotalPrice가 계산된다.")

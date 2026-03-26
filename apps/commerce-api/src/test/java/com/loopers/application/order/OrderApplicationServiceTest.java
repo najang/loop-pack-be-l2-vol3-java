@@ -6,8 +6,11 @@ import com.loopers.domain.coupon.CouponService;
 import com.loopers.domain.order.Order;
 import com.loopers.domain.order.OrderItem;
 import com.loopers.domain.order.OrderRepository;
+import com.loopers.domain.outbox.OutboxEvent;
+import com.loopers.domain.outbox.OutboxRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +51,12 @@ class OrderApplicationServiceTest {
 
     @Mock
     private CouponService couponService;
+
+    @Mock
+    private OutboxRepository outboxRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private OrderApplicationService orderApplicationService;
@@ -98,7 +107,9 @@ class OrderApplicationServiceTest {
             when(brandRepository.findById(1L)).thenReturn(Optional.of(brand));
             when(brand.getName()).thenReturn("테스트브랜드");
             when(productRepository.save(product)).thenReturn(product);
-            when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+            Order savedOrder = mock(Order.class);
+            when(savedOrder.getId()).thenReturn(ORDER_ID);
+            when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
 
             // act
             orderApplicationService.create(USER_ID, PRODUCT_ID, 2, null);
@@ -107,6 +118,7 @@ class OrderApplicationServiceTest {
             verify(product, times(1)).deductStock(2);
             verify(productRepository, times(1)).save(product);
             verify(orderRepository, times(1)).save(any(Order.class));
+            verify(outboxRepository, times(1)).save(any(OutboxEvent.class));
         }
     }
 
