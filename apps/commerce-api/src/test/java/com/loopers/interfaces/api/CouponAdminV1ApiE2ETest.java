@@ -56,7 +56,7 @@ class CouponAdminV1ApiE2ETest {
     }
 
     private CouponAdminV1Dto.CreateRequest buildCreateRequest(String name, CouponType type, int value) {
-        return new CouponAdminV1Dto.CreateRequest(name, type, value, null, ZonedDateTime.now().plusDays(30));
+        return new CouponAdminV1Dto.CreateRequest(name, type, value, null, ZonedDateTime.now().plusDays(30), null);
     }
 
     private CouponTemplate saveTemplate(String name) {
@@ -178,12 +178,36 @@ class CouponAdminV1ApiE2ETest {
             );
         }
 
+        @DisplayName("maxQuantity 포함 요청이면, 선착순 쿠폰 템플릿을 생성한다.")
+        @Test
+        void returns201WithFcfsTemplate() {
+            // arrange
+            CouponAdminV1Dto.CreateRequest request = new CouponAdminV1Dto.CreateRequest(
+                "선착순 쿠폰", CouponType.FIXED, 3000, null, ZonedDateTime.now().plusDays(30), 100
+            );
+
+            // act
+            ResponseEntity<ApiResponse<CouponAdminV1Dto.CouponResponse>> response = testRestTemplate.exchange(
+                "/api-admin/v1/coupons",
+                HttpMethod.POST,
+                new HttpEntity<>(request, createAdminHeaders()),
+                new ParameterizedTypeReference<>() {}
+            );
+
+            // assert
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED),
+                () -> assertThat(response.getBody().data().maxQuantity()).isEqualTo(100),
+                () -> assertThat(response.getBody().data().issuedCount()).isEqualTo(0)
+            );
+        }
+
         @DisplayName("필수 필드 누락 시, 400 Bad Request를 반환한다.")
         @Test
         void returns400_whenRequiredFieldMissing() {
             // arrange - name is null
             CouponAdminV1Dto.CreateRequest request = new CouponAdminV1Dto.CreateRequest(
-                null, CouponType.FIXED, 1000, null, ZonedDateTime.now().plusDays(7)
+                null, CouponType.FIXED, 1000, null, ZonedDateTime.now().plusDays(7), null
             );
 
             // act
