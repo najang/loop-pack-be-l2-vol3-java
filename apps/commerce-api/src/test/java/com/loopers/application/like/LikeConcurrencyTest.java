@@ -2,8 +2,8 @@ package com.loopers.application.like;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandService;
+import com.loopers.domain.like.LikeRepository;
 import com.loopers.domain.product.Product;
-import com.loopers.domain.product.ProductRepository;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
 import com.loopers.domain.user.UserModel;
@@ -36,7 +36,7 @@ class LikeConcurrencyTest {
     private ProductService productService;
 
     @Autowired
-    private ProductRepository productRepository;
+    private LikeRepository likeRepository;
 
     @Autowired
     private BrandService brandService;
@@ -52,9 +52,9 @@ class LikeConcurrencyTest {
         databaseCleanUp.truncateAllTables();
     }
 
-    @DisplayName("서로 다른 유저 N명이 동시에 좋아요를 누르면, 모두 성공하고 likeCount == N이다.")
+    @DisplayName("서로 다른 유저 N명이 동시에 좋아요를 누르면, 모두 성공하고 Like 레코드가 N개 저장된다.")
     @Test
-    void concurrentLike_allSucceedAndLikeCountIsN() throws Exception {
+    void concurrentLike_allSucceedAndLikeRecordsAreN() throws Exception {
         // arrange
         Brand brand = brandService.create("Nike", null);
         Product product = productService.create(brand.getId(), "운동화", null, 10000, 100, SellingStatus.SELLING);
@@ -71,14 +71,18 @@ class LikeConcurrencyTest {
 
         // act
         List<Callable<Object>> tasks = IntStream.range(0, THREAD_COUNT)
-            .<Callable<Object>>mapToObj(i -> () -> likeApplicationService.like(userIds.get(i), productId))
+            .<Callable<Object>>mapToObj(i -> () -> {
+                likeApplicationService.like(userIds.get(i), productId);
+                return null;
+            })
             .toList();
         ConcurrencyResult result = ConcurrencyTestHelper.run(tasks);
 
         // assert
         assertThat(result.successCount()).isEqualTo(THREAD_COUNT);
         assertThat(result.failureCount()).isEqualTo(0);
-        Product updated = productRepository.findById(productId).orElseThrow();
-        assertThat(updated.getLikeCount()).isEqualTo(THREAD_COUNT);
+        // likeCount는 비동기로 product_metrics에 반영되므로, 각 유저의 Like 레코드 저장 여부로 검증한다.
+        assertThat(likeRepository.findByUserId(userIds.get(0))).hasSize(1);
+        assertThat(likeRepository.findByUserId(userIds.get(THREAD_COUNT - 1))).hasSize(1);
     }
 }
