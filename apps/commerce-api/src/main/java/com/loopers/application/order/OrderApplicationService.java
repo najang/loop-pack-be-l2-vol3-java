@@ -8,11 +8,15 @@ import com.loopers.domain.order.Order;
 import com.loopers.domain.order.OrderItem;
 import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.order.OrderStatus;
+import com.loopers.domain.outbox.OutboxEvent;
+import com.loopers.domain.outbox.OutboxRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductRepository;
+import com.loopers.domain.event.UserActionEvent;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +32,8 @@ public class OrderApplicationService {
     private final ProductRepository productRepository;
     private final BrandRepository brandRepository;
     private final CouponService couponService;
+    private final OutboxRepository outboxRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Order create(Long userId, Long productId, int quantity, Long userCouponId) {
@@ -53,7 +59,13 @@ public class OrderApplicationService {
 
         OrderItem item = new OrderItem(productId, product.getName(), brand.getName(), quantity, product.getPrice());
         Order order = new Order(userId, List.of(item), userCouponId, discountAmount);
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+
+        outboxRepository.save(OutboxEvent.forOrderCreated(savedOrder.getId(), productId, quantity));
+        eventPublisher.publishEvent(new UserActionEvent(
+            UserActionEvent.EventType.ORDER_CREATED, userId, savedOrder.getId(), null
+        ));
+        return savedOrder;
     }
 
     @Transactional(readOnly = true)
