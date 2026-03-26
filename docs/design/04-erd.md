@@ -9,8 +9,6 @@ erDiagram
         varchar name
         date birth_date
         varchar email
-        int point_balance "포인트 잔액 (기본값 0)"
-        bigint version "낙관적 락"
         datetime created_at
         datetime updated_at
         datetime deleted_at
@@ -185,4 +183,3 @@ erDiagram
 ### 8. 동시성 제어 대상
 - `PRODUCT.stock`: 주문 시 비관적 락 (`SELECT ... FOR UPDATE`, productId 오름차순)
 - `PRODUCT.like_count`: 좋아요 등록/취소 시 갱신 (동시성 제어 방식 결정 필요)
-- `USER.version`: 포인트 충전/차감 시 낙관적 락 (`@Version`)
