@@ -31,8 +31,8 @@ public class AuthenticationConfig implements WebMvcConfigurer {
             .addPathPatterns("/api/v1/cart/items")
             .addPathPatterns("/api/v1/cart/items/*")
             .addPathPatterns("/api/v1/coupons/*/issue")
-            .addPathPatterns("/api/v1/users/me/coupons")
-            .addPathPatterns("/api/v1/users/me/points/charge");
+            .addPathPatterns("/api/v1/coupons/issue/*")
+            .addPathPatterns("/api/v1/users/me/coupons");
 
         registry.addInterceptor(adminAuthInterceptor)
             .addPathPatterns("/api-admin/v1/**");
