@@ -7,6 +7,7 @@ import com.loopers.domain.like.LikeRepository;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
 import com.loopers.domain.product.SellingStatus;
+import com.loopers.infrastructure.eventlog.EventLogJpaRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import com.loopers.utils.DatabaseCleanUp;
@@ -18,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -43,6 +45,12 @@ class LikeApplicationServiceIntegrationTest {
 
     @Autowired
     private ApplicationEvents applicationEvents;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private EventLogJpaRepository eventLogJpaRepository;
 
     @AfterEach
     void tearDown() {
@@ -185,6 +193,44 @@ class LikeApplicationServiceIntegrationTest {
                 .filter(e -> e.type() == LikeEvent.Type.UNLIKED && e.productId().equals(product.getId()))
                 .count();
             assertThat(count).isEqualTo(1);
+        }
+    }
+
+    @DisplayName("트랜잭션 롤백 시,")
+    @Nested
+    class RollbackScenario {
+
+        @DisplayName("like() 트랜잭션이 롤백되면, EventLog가 저장되지 않는다.")
+        @Test
+        void noEventLogSaved_whenLikeTransactionRollsBack() {
+            // arrange
+            Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
+
+            // act: setRollbackOnly()로 강제 롤백
+            transactionTemplate.executeWithoutResult(status -> {
+                likeApplicationService.like(USER_ID, product.getId());
+                status.setRollbackOnly();
+            });
+
+            // assert: 트랜잭션 미커밋 → AFTER_COMMIT 리스너 미발동 → EventLog 없음
+            assertThat(eventLogJpaRepository.count()).isZero();
+        }
+
+        @DisplayName("unlike() 트랜잭션이 롤백되면, EventLog가 저장되지 않는다.")
+        @Test
+        void noEventLogSaved_whenUnlikeTransactionRollsBack() {
+            // arrange: 이벤트 없이 직접 Like 저장 (likeRepository.save → 이벤트 미발행)
+            Product product = productService.create(BRAND_ID, "에어맥스", "Nike Air Max", 100000, 10, SellingStatus.SELLING);
+            likeRepository.save(new Like(USER_ID, product.getId()));
+
+            // act: unlike() 트랜잭션 강제 롤백
+            transactionTemplate.executeWithoutResult(status -> {
+                likeApplicationService.unlike(USER_ID, product.getId());
+                status.setRollbackOnly();
+            });
+
+            // assert: 커밋 없음 → EventLog 없음
+            assertThat(eventLogJpaRepository.count()).isZero();
         }
     }
 }
