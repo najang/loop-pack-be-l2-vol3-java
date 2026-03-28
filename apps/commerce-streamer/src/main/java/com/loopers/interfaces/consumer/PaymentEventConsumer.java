@@ -35,11 +35,7 @@ public class PaymentEventConsumer {
             if (message == null) {
                 continue;
             }
-            try {
-                processPaymentEvent(message);
-            } catch (Exception e) {
-                log.error("PaymentEvent 처리 실패: orderId={}, status={}", message.orderId(), message.status(), e);
-            }
+            processPaymentEvent(message);
         }
         acknowledgment.acknowledge();
     }
