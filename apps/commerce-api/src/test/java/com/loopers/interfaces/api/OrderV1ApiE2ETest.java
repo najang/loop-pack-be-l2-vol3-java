@@ -14,6 +14,7 @@ import com.loopers.infrastructure.brand.BrandJpaRepository;
 import com.loopers.infrastructure.coupon.CouponTemplateJpaRepository;
 import com.loopers.infrastructure.coupon.UserCouponJpaRepository;
 import com.loopers.infrastructure.order.OrderJpaRepository;
+import com.loopers.infrastructure.outbox.OutboxEventJpaRepository;
 import com.loopers.infrastructure.payment.PaymentJpaRepository;
 import com.loopers.infrastructure.pg.PgGateway;
 import com.loopers.infrastructure.pg.PgPaymentResponse;
@@ -77,6 +78,9 @@ class OrderV1ApiE2ETest {
 
     @Autowired
     private PaymentJpaRepository paymentJpaRepository;
+
+    @Autowired
+    private OutboxEventJpaRepository outboxEventJpaRepository;
 
     @Autowired
     private CouponTemplateJpaRepository couponTemplateJpaRepository;
@@ -323,9 +327,9 @@ class OrderV1ApiE2ETest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         }
 
-        @DisplayName("성공 콜백 수신 후 주문 상태가 ORDERED로 변경된다.")
+        @DisplayName("성공 콜백 수신 후 payment-events OutboxEvent(COMPLETED)가 저장된다.")
         @Test
-        void orderStatusBecomesOrdered_afterSuccessCallback() {
+        void savesCompletedOutboxEvent_afterSuccessCallback() {
             // arrange
             UserModel user = createUser(LOGIN_ID);
             mockPgGatewaySuccess();
@@ -345,13 +349,14 @@ class OrderV1ApiE2ETest {
             );
 
             // assert
-            Order order = orderJpaRepository.findByIdAndDeletedAtIsNull(orderId).orElseThrow();
-            assertThat(order.getStatus()).isEqualTo(OrderStatus.ORDERED);
+            boolean hasPaymentEvent = outboxEventJpaRepository.findByPublishedFalseOrderByCreatedAtAsc().stream()
+                .anyMatch(e -> "payment-events".equals(e.getTopic()) && e.getPayload().contains("\"status\":\"COMPLETED\""));
+            assertThat(hasPaymentEvent).isTrue();
         }
 
-        @DisplayName("실패 콜백 수신 후 주문 상태가 PAYMENT_FAILED로 변경되고 재고가 복원된다.")
+        @DisplayName("실패 콜백 수신 후 payment-events OutboxEvent(FAILED)가 저장된다.")
         @Test
-        void orderStatusBecomesPaymentFailed_andStockRestored_afterFailCallback() {
+        void savesFailedOutboxEvent_afterFailCallback() {
             // arrange
             UserModel user = createUser(LOGIN_ID);
             mockPgGatewaySuccess();
@@ -371,11 +376,9 @@ class OrderV1ApiE2ETest {
             );
 
             // assert
-            Order order = orderJpaRepository.findByIdAndDeletedAtIsNull(orderId).orElseThrow();
-            assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_FAILED);
-
-            Product restoredProduct = productJpaRepository.findByIdAndDeletedAtIsNull(product.getId()).orElseThrow();
-            assertThat(restoredProduct.getStock()).isEqualTo(10);
+            boolean hasPaymentEvent = outboxEventJpaRepository.findByPublishedFalseOrderByCreatedAtAsc().stream()
+                .anyMatch(e -> "payment-events".equals(e.getTopic()) && e.getPayload().contains("\"status\":\"FAILED\""));
+            assertThat(hasPaymentEvent).isTrue();
         }
     }
 

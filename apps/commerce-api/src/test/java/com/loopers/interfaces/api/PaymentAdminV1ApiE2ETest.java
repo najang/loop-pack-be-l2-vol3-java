@@ -1,14 +1,12 @@
 package com.loopers.interfaces.api;
 
 import com.loopers.domain.brand.Brand;
-import com.loopers.domain.order.Order;
-import com.loopers.domain.order.OrderStatus;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.SellingStatus;
 import com.loopers.domain.user.PasswordEncoder;
 import com.loopers.domain.user.UserModel;
 import com.loopers.infrastructure.brand.BrandJpaRepository;
-import com.loopers.infrastructure.order.OrderJpaRepository;
+import com.loopers.infrastructure.outbox.OutboxEventJpaRepository;
 import com.loopers.infrastructure.payment.PaymentJpaRepository;
 import com.loopers.infrastructure.pg.PgGateway;
 import com.loopers.infrastructure.pg.PgPaymentResponse;
@@ -66,10 +64,10 @@ class PaymentAdminV1ApiE2ETest {
     private ProductJpaRepository productJpaRepository;
 
     @Autowired
-    private OrderJpaRepository orderJpaRepository;
+    private PaymentJpaRepository paymentJpaRepository;
 
     @Autowired
-    private PaymentJpaRepository paymentJpaRepository;
+    private OutboxEventJpaRepository outboxEventJpaRepository;
 
     @Autowired
     private DatabaseCleanUp databaseCleanUp;
@@ -162,14 +160,13 @@ class PaymentAdminV1ApiE2ETest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         }
 
-        @DisplayName("PG가 COMPLETED를 반환하면, 200 OK와 COMPLETED 상태를 반환하고 주문이 ORDERED가 된다.")
+        @DisplayName("PG가 COMPLETED를 반환하면, 200 OK와 COMPLETED 상태를 반환하고 payment-events OutboxEvent가 저장된다.")
         @Test
-        void returns200WithCompletedStatus_andOrderBecomesOrdered_whenPgReportsCompleted() {
+        void returns200WithCompletedStatus_andOutboxEventSaved_whenPgReportsCompleted() {
             // arrange
             createUser();
             Product product = createProduct(10000, 10);
             Long paymentId = placeOrderAndGetPaymentId(product.getId());
-            Long orderId = paymentJpaRepository.findById(paymentId).orElseThrow().getOrderId();
 
             when(pgGateway.inquirePayment(any()))
                 .thenReturn(new PgPaymentStatusResponse("TX-001", "SUCCESS", null));
@@ -188,18 +185,18 @@ class PaymentAdminV1ApiE2ETest {
                 () -> assertThat(response.getBody().data().status()).isEqualTo("COMPLETED")
             );
 
-            Order order = orderJpaRepository.findByIdAndDeletedAtIsNull(orderId).orElseThrow();
-            assertThat(order.getStatus()).isEqualTo(OrderStatus.ORDERED);
+            boolean hasPaymentEvent = outboxEventJpaRepository.findByPublishedFalseOrderByCreatedAtAsc().stream()
+                .anyMatch(e -> "payment-events".equals(e.getTopic()) && e.getPayload().contains("\"status\":\"COMPLETED\""));
+            assertThat(hasPaymentEvent).isTrue();
         }
 
-        @DisplayName("PG가 FAILED를 반환하면, 200 OK와 FAILED 상태를 반환하고 주문이 PAYMENT_FAILED가 된다.")
+        @DisplayName("PG가 FAILED를 반환하면, 200 OK와 FAILED 상태를 반환하고 payment-events OutboxEvent가 저장된다.")
         @Test
-        void returns200WithFailedStatus_andOrderBecomesPaymentFailed_whenPgReportsFailed() {
+        void returns200WithFailedStatus_andOutboxEventSaved_whenPgReportsFailed() {
             // arrange
             createUser();
             Product product = createProduct(10000, 10);
             Long paymentId = placeOrderAndGetPaymentId(product.getId());
-            Long orderId = paymentJpaRepository.findById(paymentId).orElseThrow().getOrderId();
 
             when(pgGateway.inquirePayment(any()))
                 .thenReturn(new PgPaymentStatusResponse(null, "FAILED", "카드 한도 초과"));
@@ -218,8 +215,9 @@ class PaymentAdminV1ApiE2ETest {
                 () -> assertThat(response.getBody().data().status()).isEqualTo("FAILED")
             );
 
-            Order order = orderJpaRepository.findByIdAndDeletedAtIsNull(orderId).orElseThrow();
-            assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_FAILED);
+            boolean hasPaymentEvent = outboxEventJpaRepository.findByPublishedFalseOrderByCreatedAtAsc().stream()
+                .anyMatch(e -> "payment-events".equals(e.getTopic()) && e.getPayload().contains("\"status\":\"FAILED\""));
+            assertThat(hasPaymentEvent).isTrue();
         }
 
         @DisplayName("이미 COMPLETED인 결제를 sync하면, 200 OK와 변경 없이 현재 상태를 반환한다.")

@@ -3,6 +3,8 @@ package com.loopers.application.payment;
 import com.loopers.application.order.OrderApplicationService;
 import com.loopers.application.order.OrderInfo;
 import com.loopers.domain.order.Order;
+import com.loopers.domain.outbox.OutboxEvent;
+import com.loopers.domain.outbox.OutboxRepository;
 import com.loopers.domain.payment.Payment;
 import com.loopers.domain.payment.PaymentStatus;
 import com.loopers.infrastructure.pg.PgCallbackRequest;
@@ -20,6 +22,7 @@ public class PaymentFacade {
 
     private final OrderApplicationService orderApplicationService;
     private final PaymentApplicationService paymentApplicationService;
+    private final OutboxRepository outboxRepository;
     private final PlatformTransactionManager transactionManager;
 
     public OrderInfo createOrderAndPay(Long userId, Long productId, int quantity, Long userCouponId, String cardType, String cardNo) {
@@ -47,12 +50,8 @@ public class PaymentFacade {
     @Transactional
     public void handleCallback(PgCallbackRequest callback) {
         Payment payment = paymentApplicationService.handleCallback(callback);
-
-        if ("SUCCESS".equals(callback.status())) {
-            orderApplicationService.confirmPayment(payment.getOrderId());
-        } else {
-            orderApplicationService.failPayment(payment.getOrderId());
-        }
+        String outboxStatus = "SUCCESS".equals(callback.status()) ? "COMPLETED" : "FAILED";
+        outboxRepository.save(OutboxEvent.forPaymentResult(payment.getOrderId(), outboxStatus));
     }
 
     @Transactional
@@ -64,10 +63,8 @@ public class PaymentFacade {
 
         PaymentInfo updated = paymentApplicationService.syncWithPg(paymentId);
 
-        if ("COMPLETED".equals(updated.status())) {
-            orderApplicationService.confirmPayment(updated.orderId());
-        } else if ("FAILED".equals(updated.status())) {
-            orderApplicationService.failPayment(updated.orderId());
+        if ("COMPLETED".equals(updated.status()) || "FAILED".equals(updated.status())) {
+            outboxRepository.save(OutboxEvent.forPaymentResult(updated.orderId(), updated.status()));
         }
 
         return updated;

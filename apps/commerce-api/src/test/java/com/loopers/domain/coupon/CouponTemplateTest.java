@@ -164,6 +164,41 @@ class CouponTemplateTest {
         }
     }
 
+    @DisplayName("선착순 쿠폰(FCFS) 생성 시,")
+    @Nested
+    class Fcfs {
+
+        @DisplayName("maxQuantity를 지정하면 isFcfs()가 true이고 issuedCount는 0이다.")
+        @Test
+        void isFcfs_whenMaxQuantityIsSet() {
+            // arrange
+            ZonedDateTime expiredAt = ZonedDateTime.now().plusDays(7);
+
+            // act
+            CouponTemplate template = new CouponTemplate("선착순", CouponType.FIXED, 1000, null, expiredAt, 100);
+
+            // assert
+            assertAll(
+                () -> assertThat(template.isFcfs()).isTrue(),
+                () -> assertThat(template.getMaxQuantity()).isEqualTo(100),
+                () -> assertThat(template.getIssuedCount()).isEqualTo(0)
+            );
+        }
+
+        @DisplayName("maxQuantity가 null이면 isFcfs()가 false이다.")
+        @Test
+        void isNotFcfs_whenMaxQuantityIsNull() {
+            // arrange
+            ZonedDateTime expiredAt = ZonedDateTime.now().plusDays(7);
+
+            // act
+            CouponTemplate template = new CouponTemplate("일반", CouponType.FIXED, 1000, null, expiredAt);
+
+            // assert
+            assertThat(template.isFcfs()).isFalse();
+        }
+    }
+
     @DisplayName("update()를 호출할 때,")
     @Nested
     class Update {

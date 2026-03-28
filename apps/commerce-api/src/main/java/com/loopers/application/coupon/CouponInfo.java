@@ -11,7 +11,9 @@ public record CouponInfo(
     int value,
     Integer minOrderAmount,
     ZonedDateTime expiredAt,
-    boolean isActive
+    boolean isActive,
+    Integer maxQuantity,
+    int issuedCount
 ) {
     public static CouponInfo from(CouponTemplate template) {
         return new CouponInfo(
@@ -21,7 +23,9 @@ public record CouponInfo(
             template.getValue(),
             template.getMinOrderAmount(),
             template.getExpiredAt(),
-            template.isActive()
+            template.isActive(),
+            template.getMaxQuantity(),
+            template.getIssuedCount()
         );
     }
 }

@@ -132,8 +132,7 @@
 3. 각 상품 존재 여부 및 판매 가능 여부 확인
 4. 재고 확인 및 차감 보장(동시성 고려)
 5. 쿠폰 적용 여부 판단(couponId nullable) 및 처리
-6. 최종 결제 금액만큼 포인트 차감(잔액 부족 시 주문 실패)
-7. 주문 생성(주문/주문아이템)
+6. 주문 생성(주문/주문아이템)
 8. 주문아이템에 상품 정보 스냅샷 저장
 9. 주문 결과 응답
 
@@ -159,8 +158,7 @@
 4. 주문 상태가 ORDERED인지 확인 (ORDERED가 아니면 취소 불가)
 5. 주문 상태를 CANCELLED로 변경
 6. 각 주문 아이템의 재고 복원
-7. 포인트 환불(finalTotalPrice 기준)
-8. 취소 결과 응답
+7. 취소 결과 응답
 
 ---
 
@@ -217,7 +215,7 @@
 - 사용자는 주문 생성 시 카드 정보(카드 타입, 카드 번호)를 함께 전달한다.
 - 시스템은 PG사에 결제를 요청하고, PG사 콜백으로 결제 성공/실패를 수신한다.
 - 결제 성공 시 주문 상태가 PAID로 변경된다.
-- 결제 실패 시 재고 복원, 포인트 환불, 주문 CANCELLED 처리한다.
+- 결제 실패 시 재고 복원, 쿠폰 복원, 주문 PAYMENT_FAILED 처리한다.
 
 [기능 흐름]
 
@@ -225,7 +223,7 @@
 
 1. 로그인 사용자만 가능
 2. 주문 아이템 목록 검증 + 카드 정보(cardType, cardNo) 포함 요청
-3. 단일 트랜잭션: 재고 차감 + 쿠폰 처리 + 포인트 차감 + 주문(PENDING) + 결제(PENDING) 저장
+3. 단일 트랜잭션: 재고 차감 + 쿠폰 처리 + 주문(PENDING) + 결제(PENDING) 저장
 4. 트랜잭션 커밋 후 PG 결제 요청(비동기, 커넥션 점유 방지)
 5. PG 응답으로 pgTransactionId 수신
 6. 202 Accepted 응답 (결제 완료 전이므로)
@@ -237,26 +235,7 @@
 3. status == COMPLETED
    - Payment → COMPLETED, Order → PAID
 4. status == FAILED
-   - Payment → FAILED, 재고 복원, 포인트 환불, Order → CANCELLED
-
----
-
-## 포인트(Point)
-
-[유저 스토리]
-
-- 사용자는 포인트를 충전할 수 있다.
-- 주문 시 최종 결제 금액만큼 포인트가 차감된다. 잔액이 부족하면 주문이 실패한다.
-- 주문 취소 시 차감된 포인트가 전액 환불된다.
-
-[기능 흐름]
-
-#### 1) 포인트 충전(POST `/api/v1/users/me/points/charge`)
-
-1. 로그인 사용자만 가능
-2. 충전 금액 검증(amount > 0, 그 외면 400)
-3. 포인트 충전 처리(낙관적 락 적용)
-4. 충전 후 잔액 응답(201)
+   - Payment → FAILED, 재고 복원, 쿠폰 복원, Order → PAYMENT_FAILED
 
 ---
 
@@ -394,11 +373,7 @@
 | 주문 실패 조건    | 쿠폰 없음 / USED / EXPIRED / 타 유저 소유 / 최소주문금액 미충족   |
 | 주문 스냅샷 금액   | 쿠폰 적용 전 금액 + 할인 금액 + 최종 결제 금액 포함                |
 | 쿠폰 사용 처리 시점 | 주문 성공 트랜잭션 내에서 USED로 변경                         |
-| 포인트 타입       | Money VO (`@Embedded`, `point_balance` 컬럼)        |
-| 포인트 동시성 제어  | `UserModel.@Version` 낙관적 락                         |
-| 포인트 차감 시점   | 주문 생성 트랜잭션 내 (쿠폰 처리 직후)                          |
-| 포인트 환불 기준   | `finalTotalPrice` — 실제 결제 금액 전액 환불                 |
 | 결제 상태       | PENDING → COMPLETED \| FAILED                        |
-| 결제 실패 보상    | 재고 복원 + 포인트 환불 + Order CANCELLED (failPayment 흐름)  |
+| 결제 실패 보상    | 재고 복원 + 쿠폰 복원 + Order PAYMENT_FAILED (failPayment 흐름)  |
 | 결제 성공 처리    | confirmPayment() — Order PAID 상태로 전이                 |
 | PG 시뮬레이터   | 독립 Spring Boot 앱 (`apps/pg-simulator`) — 실제 PG 역할 수행 |
