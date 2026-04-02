@@ -22,7 +22,10 @@ import com.loopers.infrastructure.product.ProductJpaRepository;
 import com.loopers.infrastructure.user.UserJpaRepository;
 import com.loopers.interfaces.api.order.OrderV1Dto;
 import com.loopers.interfaces.api.payment.PaymentV1Dto;
+import com.loopers.domain.queue.EntryTokenService;
+import com.loopers.support.auth.QueueEntryTokenInterceptor;
 import com.loopers.utils.DatabaseCleanUp;
+import com.loopers.utils.RedisCleanUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -91,12 +94,19 @@ class OrderV1ApiE2ETest {
     @Autowired
     private DatabaseCleanUp databaseCleanUp;
 
+    @Autowired
+    private EntryTokenService entryTokenService;
+
+    @Autowired
+    private RedisCleanUp redisCleanUp;
+
     @MockBean
     private PgGateway pgGateway;
 
     @AfterEach
     void tearDown() {
         databaseCleanUp.truncateAllTables();
+        redisCleanUp.truncateAll();
     }
 
     private UserModel createUser(String loginId) {
@@ -116,6 +126,14 @@ class OrderV1ApiE2ETest {
         return headers;
     }
 
+    private HttpHeaders createOrderAuthHeaders(String loginId) {
+        UserModel user = userJpaRepository.findByLoginIdValue(loginId).orElseThrow();
+        String token = entryTokenService.issue(user.getId());
+        HttpHeaders headers = createAuthHeaders(loginId);
+        headers.set(QueueEntryTokenInterceptor.HEADER_ENTRY_TOKEN, token);
+        return headers;
+    }
+
     private Product createProduct(String name, int price, int stock, SellingStatus status) {
         Brand brand = brandJpaRepository.save(new Brand("Nike", null));
         return productJpaRepository.save(new Product(brand.getId(), name, null, price, stock, status));
@@ -126,7 +144,7 @@ class OrderV1ApiE2ETest {
         return testRestTemplate.exchange(
             "/api/v1/orders",
             HttpMethod.POST,
-            new HttpEntity<>(request, createAuthHeaders(loginId)),
+            new HttpEntity<>(request, createOrderAuthHeaders(loginId)),
             new ParameterizedTypeReference<>() {}
         );
     }
@@ -182,7 +200,7 @@ class OrderV1ApiE2ETest {
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
                 "/api/v1/orders",
                 HttpMethod.POST,
-                new HttpEntity<>(request, createAuthHeaders(LOGIN_ID)),
+                new HttpEntity<>(request, createOrderAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
 
@@ -202,7 +220,7 @@ class OrderV1ApiE2ETest {
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
                 "/api/v1/orders",
                 HttpMethod.POST,
-                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, null, CARD_TYPE, CARD_NO), createAuthHeaders(LOGIN_ID)),
+                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, null, CARD_TYPE, CARD_NO), createOrderAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
 
@@ -222,7 +240,7 @@ class OrderV1ApiE2ETest {
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
                 "/api/v1/orders",
                 HttpMethod.POST,
-                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 5, null, CARD_TYPE, CARD_NO), createAuthHeaders(LOGIN_ID)),
+                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 5, null, CARD_TYPE, CARD_NO), createOrderAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
 
@@ -297,7 +315,7 @@ class OrderV1ApiE2ETest {
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
                 "/api/v1/orders",
                 HttpMethod.POST,
-                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, userCoupon.getId(), CARD_TYPE, CARD_NO), createAuthHeaders(LOGIN_ID)),
+                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, userCoupon.getId(), CARD_TYPE, CARD_NO), createOrderAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
 
@@ -319,7 +337,7 @@ class OrderV1ApiE2ETest {
             ResponseEntity<ApiResponse<Object>> response = testRestTemplate.exchange(
                 "/api/v1/orders",
                 HttpMethod.POST,
-                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, otherUserCoupon.getId(), CARD_TYPE, CARD_NO), createAuthHeaders(LOGIN_ID)),
+                new HttpEntity<>(new OrderV1Dto.CreateRequest(product.getId(), 1, otherUserCoupon.getId(), CARD_TYPE, CARD_NO), createOrderAuthHeaders(LOGIN_ID)),
                 new ParameterizedTypeReference<>() {}
             );
 
