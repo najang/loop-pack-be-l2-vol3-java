@@ -15,6 +15,7 @@ public class AuthenticationConfig implements WebMvcConfigurer {
     private final AuthInterceptor authInterceptor;
     private final AdminAuthInterceptor adminAuthInterceptor;
     private final OptionalAuthInterceptor optionalAuthInterceptor;
+    private final QueueEntryTokenInterceptor queueEntryTokenInterceptor;
     private final AuthenticatedUserArgumentResolver authenticatedUserArgumentResolver;
 
     @Override
@@ -32,7 +33,12 @@ public class AuthenticationConfig implements WebMvcConfigurer {
             .addPathPatterns("/api/v1/cart/items/*")
             .addPathPatterns("/api/v1/coupons/*/issue")
             .addPathPatterns("/api/v1/coupons/issue/*")
-            .addPathPatterns("/api/v1/users/me/coupons");
+            .addPathPatterns("/api/v1/users/me/coupons")
+            .addPathPatterns("/api/v1/queue/enter")
+            .addPathPatterns("/api/v1/queue/position");
+
+        registry.addInterceptor(queueEntryTokenInterceptor)
+            .addPathPatterns("/api/v1/orders");
 
         registry.addInterceptor(adminAuthInterceptor)
             .addPathPatterns("/api-admin/v1/**");

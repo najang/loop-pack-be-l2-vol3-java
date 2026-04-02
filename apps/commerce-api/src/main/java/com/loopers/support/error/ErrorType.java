@@ -14,7 +14,8 @@ public enum ErrorType {
     FORBIDDEN(HttpStatus.FORBIDDEN, HttpStatus.FORBIDDEN.getReasonPhrase(), "접근 권한이 없습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, HttpStatus.NOT_FOUND.getReasonPhrase(), "존재하지 않는 요청입니다."),
     CONFLICT(HttpStatus.CONFLICT, HttpStatus.CONFLICT.getReasonPhrase(), "이미 존재하는 리소스입니다."),
-    PAYMENT_FAILED(HttpStatus.BAD_GATEWAY, "PAYMENT_FAILED", "결제 처리에 실패했습니다.");
+    PAYMENT_FAILED(HttpStatus.BAD_GATEWAY, "PAYMENT_FAILED", "결제 처리에 실패했습니다."),
+    SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase(), "서비스를 일시적으로 사용할 수 없습니다.");
 
     private final HttpStatus status;
     private final String code;
