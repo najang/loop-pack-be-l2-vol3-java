@@ -28,6 +28,10 @@ public class QueueEntryTokenInterceptor implements HandlerInterceptor {
         UserModel user = (UserModel) request.getAttribute(AuthInterceptor.ATTR_AUTHENTICATED_USER);
         String token = request.getHeader(HEADER_ENTRY_TOKEN);
 
+        if (user == null) {
+            throw new CoreException(ErrorType.UNAUTHORIZED, "인증이 필요합니다.");
+        }
+
         try {
             if (!entryTokenService.validate(user.getId(), token)) {
                 throw new CoreException(ErrorType.FORBIDDEN, "입장 토큰이 필요합니다.");
