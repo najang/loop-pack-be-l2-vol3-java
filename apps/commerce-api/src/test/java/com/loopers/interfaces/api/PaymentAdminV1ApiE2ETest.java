@@ -15,7 +15,10 @@ import com.loopers.infrastructure.product.ProductJpaRepository;
 import com.loopers.infrastructure.user.UserJpaRepository;
 import com.loopers.interfaces.api.order.OrderV1Dto;
 import com.loopers.interfaces.api.payment.PaymentV1Dto;
+import com.loopers.domain.queue.EntryTokenService;
+import com.loopers.support.auth.QueueEntryTokenInterceptor;
 import com.loopers.utils.DatabaseCleanUp;
+import com.loopers.utils.RedisCleanUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -72,12 +75,19 @@ class PaymentAdminV1ApiE2ETest {
     @Autowired
     private DatabaseCleanUp databaseCleanUp;
 
+    @Autowired
+    private EntryTokenService entryTokenService;
+
+    @Autowired
+    private RedisCleanUp redisCleanUp;
+
     @MockBean
     private PgGateway pgGateway;
 
     @AfterEach
     void tearDown() {
         databaseCleanUp.truncateAllTables();
+        redisCleanUp.truncateAll();
     }
 
     private UserModel createUser() {
@@ -94,6 +104,14 @@ class PaymentAdminV1ApiE2ETest {
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Loopers-LoginId", LOGIN_ID);
         headers.set("X-Loopers-LoginPw", RAW_PASSWORD);
+        return headers;
+    }
+
+    private HttpHeaders createOrderAuthHeaders() {
+        UserModel user = userJpaRepository.findByLoginIdValue(LOGIN_ID).orElseThrow();
+        String token = entryTokenService.issue(user.getId());
+        HttpHeaders headers = createAuthHeaders();
+        headers.set(QueueEntryTokenInterceptor.HEADER_ENTRY_TOKEN, token);
         return headers;
     }
 
@@ -114,7 +132,7 @@ class PaymentAdminV1ApiE2ETest {
         ResponseEntity<ApiResponse<OrderV1Dto.OrderResponse>> response = testRestTemplate.exchange(
             "/api/v1/orders",
             HttpMethod.POST,
-            new HttpEntity<>(request, createAuthHeaders()),
+            new HttpEntity<>(request, createOrderAuthHeaders()),
             new ParameterizedTypeReference<>() {}
         );
         Long orderId = response.getBody().data().id();
